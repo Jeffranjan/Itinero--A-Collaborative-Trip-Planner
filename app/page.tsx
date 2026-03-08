@@ -1,185 +1,182 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { motion } from "framer-motion";
-import { gsap } from "gsap";
-import { Search } from "lucide-react";
 import { Nav } from "@/components/Nav";
-
-const TABS = [
-  {
-    id: "all",
-    label: "Search All",
-    placeholder: "Places, activities, hotels...",
-  },
-  {
-    id: "itinerary",
-    label: "Itinerary Builder",
-    placeholder: "Create or search itineraries...",
-  },
-  {
-    id: "things",
-    label: "Things To Do",
-    placeholder: "Attractions, tours, experiences...",
-  },
-  { id: "stay", label: "Stay", placeholder: "Hotels, restaurants..." },
-];
+import { Hero } from "@/components/home/Hero";
+import { AdvancedFeatures } from "@/components/home/AdvancedFeatures";
+import { InteractivePreview } from "@/components/home/InteractivePreview";
+import { WorkflowTimeline } from "@/components/home/WorkflowTimeline";
+import { motion } from "framer-motion";
+import {
+  Users,
+  ListTodo,
+  Navigation,
+  Move,
+  CalendarCheck,
+  FileText,
+  Wallet,
+} from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/Button";
 
 export default function Home() {
-  const heroRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState(TABS[0]);
-
-  useEffect(() => {
-    // GSAP staggered reveal for hero section
-    const ctx = gsap.context(() => {
-      const tl = gsap.timeline({
-        defaults: { ease: "power3.out", duration: 0.6 },
-      });
-
-      tl.fromTo(
-        ".hero-badge",
-        { opacity: 0, y: 20 },
-        { opacity: 1, y: 0, delay: 0.1 }
-      )
-        .fromTo(
-          ".hero-heading .word",
-          { opacity: 0, y: 30 },
-          { opacity: 1, y: 0, stagger: 0.1 },
-          "-=0.4"
-        )
-        .fromTo(
-          ".hero-tabs .tab-item",
-          { opacity: 0, y: 15 },
-          { opacity: 1, y: 0, stagger: 0.05 },
-          "-=0.4"
-        )
-        .fromTo(
-          ".hero-search",
-          { opacity: 0, scale: 0.95, y: 20 },
-          { opacity: 1, scale: 1, y: 0 },
-          "-=0.3"
-        );
-    }, heroRef);
-
-    return () => ctx.revert(); // Proper cleanup of GSAP effects
-  }, []);
-
   return (
-    <div className="relative flex min-h-screen w-full flex-col items-center overflow-x-hidden font-[family-name:var(--font-geist-sans)]">
+    <div className="relative flex min-h-screen w-full flex-col bg-[#0D0D0D] font-[family-name:var(--font-geist-sans)] selection:bg-accent-orange/30">
       <Nav />
-      {/* Background radial gradient glow behind hero */}
-      <div className="pointer-events-none absolute left-1/2 top-0 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-accent-orange/10 opacity-60 blur-3xl sm:h-[800px] sm:w-[800px]" />
 
-      {/* Hero Section Container */}
-      <section
-        ref={heroRef}
-        className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1200px] flex-col items-center justify-center px-6 pb-12 pt-32 text-center"
-      >
-        <div className="hero-badge mb-8 inline-flex items-center rounded-full border border-accent-orange/20 bg-accent-orange/10 px-4 py-1.5 text-sm font-medium text-accent-orange-light">
-          ✨ The Ultimate Trip Planning Experience
-        </div>
+      <main className="flex-1">
+        <Hero />
 
-        <h1 className="hero-heading mb-12 max-w-[850px] text-5xl font-bold leading-[1.1] tracking-tight text-white sm:text-6xl md:text-7xl lg:text-[80px]">
-          <span className="word inline-block">Plan</span>{" "}
-          <span className="word inline-block">Trips</span>{" "}
-          <span className="word inline-block bg-gradient-to-r from-orange-500 via-orange-400 to-yellow-400 bg-clip-text text-transparent drop-shadow-sm">
-            Together
-          </span>
-        </h1>
-
-        {/* Dynamic TripAdvisor-style Tab & Search block */}
-        <div className="flex w-full max-w-3xl flex-col items-center">
-          {/* Category Tabs */}
-          <div className="hero-tabs mb-6 flex w-full flex-wrap justify-center gap-2 border-b border-white/10 px-2 sm:gap-6">
-            {TABS.map((tab) => {
-              const isActive = activeTab.id === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab)}
-                  className={`tab-item relative px-4 py-3 text-sm font-medium transition-colors sm:text-base ${
-                    isActive ? "text-white" : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  {tab.label}
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeTabIndicator"
-                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-orange"
-                      transition={{
-                        type: "spring",
-                        stiffness: 300,
-                        damping: 30,
-                      }}
-                    />
-                  )}
-                </button>
-              );
-            })}
+        {/* Features Section */}
+        <section
+          id="features"
+          className="relative z-10 mx-auto w-full max-w-[1200px] px-6 py-24 sm:py-32"
+        >
+          <div className="mb-16 text-center">
+            <h2 className="mb-4 text-3xl font-bold tracking-tight text-white sm:text-4xl md:text-5xl">
+              Everything you need to plan the perfect trip
+            </h2>
+            <p className="mx-auto max-w-[600px] text-lg text-gray-400">
+              Powerful tools designed to simplify group travel planning from
+              start to finish.
+            </p>
           </div>
 
-          {/* Search Bar */}
-          <div className="hero-search group relative w-full">
-            <div className="absolute inset-0 rounded-full bg-accent-orange/5 blur-xl transition-all duration-300 group-focus-within:bg-accent-orange/20 group-focus-within:blur-2xl"></div>
-            <div className="relative flex h-16 w-full items-center overflow-hidden rounded-full border border-white/10 bg-[#1A1A1A] shadow-2xl transition-all duration-300 focus-within:border-accent-orange/50 focus-within:ring-1 focus-within:ring-accent-orange/50">
-              <div className="pl-6 pr-3 text-gray-400">
-                <Search className="h-5 w-5 sm:h-6 sm:w-6" />
-              </div>
-              <input
-                type="text"
-                placeholder={activeTab.placeholder}
-                className="h-full flex-1 bg-transparent px-2 text-base text-white outline-none placeholder:text-gray-500 sm:text-lg"
-              />
-              <div className="pr-2">
-                <button className="flex h-12 w-24 items-center justify-center rounded-full bg-accent-orange font-medium text-white transition-all duration-300 hover:scale-[1.05] hover:bg-orange-600 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] active:scale-95 sm:w-32">
-                  Search
-                </button>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                title: "Smart Itinerary",
+                desc: "Organize your trips into clear, day-by-day schedules visually.",
+                icon: <Navigation className="h-6 w-6 text-accent-orange" />,
+              },
+              {
+                title: "Real-Time Collaboration",
+                desc: "Invite friends and plan together live with instant updates.",
+                icon: <Users className="h-6 w-6 text-blue-500" />,
+              },
+              {
+                title: "Drag-and-Drop Planning",
+                desc: "Easily reorder activities and days to perfect your schedule.",
+                icon: <Move className="h-6 w-6 text-green-500" />,
+              },
+              {
+                title: "Group Checklists",
+                desc: "Keep track of packing lists and tasks for everyone.",
+                icon: <ListTodo className="h-6 w-6 text-yellow-500" />,
+              },
+              {
+                title: "Reservations Manager",
+                desc: "Store flights, hotels, and bookings all in one place.",
+                icon: <CalendarCheck className="h-6 w-6 text-purple-500" />,
+              },
+              {
+                title: "Trip Documents Storage",
+                desc: "Upload and access important PDFs and tickets anytime.",
+                icon: <FileText className="h-6 w-6 text-pink-500" />,
+              },
+              {
+                title: "Expense Splitting",
+                desc: "Track group costs and split payments effortlessly.",
+                icon: <Wallet className="h-6 w-6 text-emerald-400" />,
+              },
+            ].map((feature, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.5, delay: i * 0.1, ease: "easeOut" }}
+                whileHover={{ scale: 1.02 }}
+                className="group relative rounded-2xl border border-white/10 bg-[#161616]/50 p-8 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-white/30 hover:shadow-[0_0_30px_rgba(255,255,255,0.05)]"
+              >
+                <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-xl border border-white/5 bg-[#1A1A1A] transition-colors duration-300 group-hover:bg-white/5">
+                  {feature.icon}
+                </div>
+                <h3 className="mb-3 text-xl font-bold text-white">
+                  {feature.title}
+                </h3>
+                <p className="text-sm leading-relaxed text-gray-400 sm:text-base">
+                  {feature.desc}
+                </p>
+              </motion.div>
+            ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Feature Preview Section */}
-      <section className="relative z-10 mx-auto w-full max-w-[1200px] px-6 py-24">
-        <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-3">
-          {[
-            {
-              title: "Real-time Collaboration",
-              desc: "Sync your plans instantly with your entire group. No more confusing spreadsheets or long chat threads.",
-            },
-            {
-              title: "Smart Itinerary Builder",
-              desc: "Optimize your travel routes and schedules automatically with our intelligent planning engine.",
-            },
-            {
-              title: "Budget Tracking",
-              desc: "Keep everyone's spending clear and transparent. Split costs seamlessly during your trip.",
-            },
-          ].map((feature, i) => (
+        <AdvancedFeatures />
+
+        <InteractivePreview />
+
+        <WorkflowTimeline />
+
+        {/* Final CTA Section */}
+        <section className="relative z-10 mx-auto w-full max-w-[1200px] px-6 py-24 text-center sm:py-32">
+          <div className="relative overflow-hidden rounded-[2rem] border border-accent-orange/20 bg-gradient-to-b from-[#1A1A1A] to-[#0D0D0D] px-6 py-20 sm:py-24">
+            {/* Animated Glow */}
             <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.6, delay: i * 0.1, ease: "easeOut" }}
-              whileHover={{ y: -6 }}
-              className="group relative rounded-xl border border-white/5 bg-card-dark p-8 shadow-sm transition-colors duration-300 hover:border-accent-orange/30 hover:shadow-[0_8px_30px_rgba(249,115,22,0.12)]"
+              animate={{ opacity: [0.3, 0.6, 0.3], scale: [0.95, 1.05, 0.95] }}
+              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+              className="pointer-events-none absolute left-1/2 top-0 h-full w-full -translate-x-1/2 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-accent-orange/30 via-transparent to-transparent opacity-50"
+            />
+
+            {/* Floating Particles */}
+            {[...Array(8)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="pointer-events-none absolute h-2 w-2 rounded-full bg-accent-orange/40"
+                animate={{
+                  y: [0, -40, 0],
+                  x: [0, i % 2 === 0 ? 20 : -20, 0],
+                  opacity: [0, 0.8, 0],
+                }}
+                transition={{
+                  duration: 4 + i,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: i * 0.5,
+                }}
+                style={{
+                  left: `${10 + i * 11}%`,
+                  top: `${20 + (i % 3) * 20}%`,
+                }}
+              />
+            ))}
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="relative z-10"
             >
-              <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full border border-white/5 bg-surface-dark transition-colors duration-300 group-hover:border-accent-orange/30 group-hover:bg-accent-orange/10">
-                <div className="h-4 w-4 rounded-full bg-accent-orange/70 transition-colors duration-300 group-hover:bg-accent-orange group-hover:shadow-[0_0_12px_rgba(249,115,22,0.6)]" />
-              </div>
-              <h3 className="mb-3 text-xl font-bold text-white">
-                {feature.title}
-              </h3>
-              <p className="text-sm leading-relaxed text-gray-400 sm:text-base">
-                {feature.desc}
+              <h2 className="mb-6 text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl">
+                Start building your
+                <br className="hidden sm:block" /> next trip today.
+              </h2>
+              <p className="mx-auto mb-10 max-w-[600px] text-lg text-gray-400">
+                Join thousands of travelers who plan their adventures together.
+                Free to get started.
               </p>
+
+              <motion.div whileHover={{ scale: 1.05 }} className="inline-block">
+                <Button
+                  asChild
+                  size="lg"
+                  className="h-14 rounded-full bg-accent-orange px-10 text-lg font-semibold text-white shadow-[0_0_20px_rgba(249,115,22,0.2)] transition-all hover:bg-orange-600 hover:shadow-[0_0_30px_rgba(249,115,22,0.6)]"
+                >
+                  <Link href="/dashboard">Create Your First Trip</Link>
+                </Button>
+              </motion.div>
             </motion.div>
-          ))}
-        </div>
-      </section>
+          </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-white/5 py-12 text-center">
+        <p className="text-sm text-gray-500">
+          © 2026 Itinero. All rights reserved.
+        </p>
+      </footer>
     </div>
   );
 }

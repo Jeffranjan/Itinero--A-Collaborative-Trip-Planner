@@ -15,9 +15,12 @@
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
+*.pem
+/sh_files/
 *.pem
 
 # debug
@@ -26,7 +29,10 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
+.env
 .env*.local
+.env.development
+.env.production
 
 # vercel
 .vercel

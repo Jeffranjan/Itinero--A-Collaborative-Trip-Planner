@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   description: "Plan your trips collaboratively with ease.",
 };
 
-import { TransitionWrapper } from "@/components/transition-wrapper";
+import { PageTransition } from "@/components/motion/PageTransition";
 
 export default function RootLayout({
   children,
@@ -29,13 +29,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} bg-background-dark selection:bg-accent-orange relative antialiased selection:text-white`}
+        className={`${geistSans.variable} ${geistMono.variable} relative bg-background-dark antialiased selection:bg-accent-orange selection:text-white`}
       >
         {/* Subtle Radial Gradient Background */}
-        <div className="from-card-dark/40 via-background-dark to-background-dark pointer-events-none fixed inset-0 z-[-1] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))]"></div>
+        <div className="pointer-events-none fixed inset-0 z-[-1] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-card-dark/40 via-background-dark to-background-dark"></div>
 
-        <TransitionWrapper>{children}</TransitionWrapper>
-        <Toaster theme="dark" position="top-center" />
+        <PageTransition>{children}</PageTransition>
+        <Toaster theme="dark" position="bottom-right" />
       </body>
     </html>
   );
