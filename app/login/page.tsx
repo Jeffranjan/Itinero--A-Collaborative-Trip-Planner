@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 
 import { account, databases } from "@/lib/appwrite";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;

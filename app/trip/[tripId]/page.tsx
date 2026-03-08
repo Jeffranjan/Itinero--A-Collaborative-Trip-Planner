@@ -44,7 +44,7 @@ import {
 } from "@/services/roleRequest.service";
 import { Trip, TripDay, TripActivity } from "@/types/trip";
 import { Nav } from "@/components/Nav";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { AddActivityModal } from "@/components/AddActivityModal";
 import { ActivityCard } from "@/components/ActivityCard";
 import { MemberList } from "@/components/MemberList";

@@ -9,7 +9,7 @@ import {
   AlignLeft,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 
 import { reservationService } from "@/services/reservation.service";
 import { TripReservation, ReservationType } from "@/types/reservation";

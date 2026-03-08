@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 import { tripService } from "@/services/trip.service";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { ModalWrapper } from "@/components/ui/ModalWrapper";
 
 const formSchema = z

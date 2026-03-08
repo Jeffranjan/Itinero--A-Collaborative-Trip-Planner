@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { tripService } from "@/services/trip.service";
 import { memberService } from "@/services/member.service";
 import { Trip } from "@/types/trip";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 
 function JoinTripContent() {

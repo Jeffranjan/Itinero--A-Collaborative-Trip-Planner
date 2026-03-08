@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Plus, ListTodo } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { checklistService } from "@/services/checklist.service";
 import { TripChecklist, ChecklistItem as ItemType } from "@/types/checklist";
 import { ChecklistList } from "./ChecklistList";

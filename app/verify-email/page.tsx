@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
 import Link from "next/link";
 import { account } from "@/lib/appwrite";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 
 function VerifyEmailContent() {
   const router = useRouter();

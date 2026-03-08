@@ -9,7 +9,7 @@ import { Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { tripService } from "@/services/trip.service";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { Trip } from "@/types/trip";
 
 const formSchema = z

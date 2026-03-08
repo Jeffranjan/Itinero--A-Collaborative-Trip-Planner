@@ -7,7 +7,7 @@ import { Mail, ArrowRight, Loader2, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { account } from "@/lib/appwrite";
 import { useAuth } from "@/hooks/useAuth";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 
 export default function VerifyNoticePage() {
   const router = useRouter();

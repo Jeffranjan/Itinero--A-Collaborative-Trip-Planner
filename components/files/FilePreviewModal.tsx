@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Download, ExternalLink } from "lucide-react";
 import { TripFile } from "@/types/file";
 import { fileService } from "@/services/file.service";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 
 interface FilePreviewModalProps {
   isOpen: boolean;

@@ -18,7 +18,7 @@ import {
   useTransform,
 } from "framer-motion";
 
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { budgetService } from "@/services/budget.service";
 import { memberService } from "@/services/member.service";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";

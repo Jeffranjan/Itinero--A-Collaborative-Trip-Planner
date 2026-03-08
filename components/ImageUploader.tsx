@@ -10,7 +10,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { mediaService } from "@/services/media.service";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 
 interface ImageUploaderProps {
   onUploadComplete: (fileId: string) => void;

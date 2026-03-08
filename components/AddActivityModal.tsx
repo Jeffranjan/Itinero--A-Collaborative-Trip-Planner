@@ -9,7 +9,7 @@ import { toast } from "sonner";
 
 import { activityService } from "@/services/activity.service";
 import { TripActivity } from "@/types/trip";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { ModalWrapper } from "@/components/ui/ModalWrapper";
 
 const formSchema = z.object({

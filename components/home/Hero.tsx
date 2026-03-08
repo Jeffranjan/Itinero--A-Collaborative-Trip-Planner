@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion, Variants } from "framer-motion";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { FloatingTripPreview } from "./FloatingTripPreview";
 
 if (typeof window !== "undefined") {

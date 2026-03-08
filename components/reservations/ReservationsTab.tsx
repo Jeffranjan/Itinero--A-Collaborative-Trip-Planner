@@ -8,7 +8,7 @@ import { memberService } from "@/services/member.service";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { TripReservation } from "@/types/reservation";
 
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { ReservationCard } from "@/components/reservations/ReservationCard";
 import { CreateReservationModal } from "@/components/reservations/CreateReservationModal";
 

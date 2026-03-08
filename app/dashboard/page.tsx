@@ -18,7 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Nav } from "@/components/Nav";
 import { tripService } from "@/services/trip.service";
 import { Trip } from "@/types/trip";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { CreateTripModal } from "@/components/CreateTripModal";
 import { TransitionWrapper } from "@/components/TransitionWrapper";
 import { AuthGuard } from "@/components/auth/AuthGuard";
