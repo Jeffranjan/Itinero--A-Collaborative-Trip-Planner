@@ -7,6 +7,8 @@ import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import Image from "next/image";
+import logo from "@/app/images/iteneroLogo.png";
 
 import { account, databases } from "@/lib/appwrite";
 import { Button } from "@/components/ui/button";
@@ -166,11 +168,13 @@ function LoginContent() {
         className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-card-dark p-8 shadow-2xl"
       >
         <div className="mb-8 text-center">
-          <Link
-            href="/"
-            className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-accent-orange to-orange-400 text-2xl font-bold text-white shadow-[0_0_15px_rgba(249,115,22,0.5)]"
-          >
-            T
+          <Link href="/" className="mb-6 inline-block">
+            <Image
+              src={logo}
+              alt="Itenero Logo"
+              className="h-40 w-auto"
+              priority
+            />
           </Link>
           <h1 className="text-2xl font-bold text-white">
             {isLogin ? "Welcome back" : "Create an account"}

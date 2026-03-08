@@ -1,6 +1,6 @@
 # Itinero — Collaborative Trip Planning SaaS
 
-**Itinero** is a collaborative trip planning platform built during the **Cohort 26 Buildathon by ChaiCode**.
+**Itinero** is a collaborative trip planning platform built during the **Cohort 26 Buildathon by [ChaiCode](https://chaicode.com)**.
 
 The goal of this project was to create a modern SaaS-style application that allows users to **plan trips together, organize itineraries, and collaborate with friends in real-time**.
 
@@ -33,31 +33,31 @@ Example options:
 
 ## Home Page
 
-![Home Page Screenshot](./screenshots/landing.png)
+![Home Page Screenshot](./app/images/HomePage.png)
 
 ---
 
 ## Dashboard
 
-![Dashboard Screenshot](./screenshots/dashboard.png)
+![Dashboard Screenshot](./app/images/Dashboard.png)
 
 ---
 
 ## Trip Itinerary Planner
 
-![Trip Planner Screenshot](./screenshots/planner.png)
+![Trip Planner Screenshot](./app/images/TripPlanner.png)
 
 ---
 
 ## Collaborative Trip View
 
-![Trip Collaboration Screenshot](./screenshots/collaboration.png)
+![Trip Collaboration Screenshot](./app/images/Collaboration.png)
 
 ---
-
+                    
 ## Authentication Flow
 
-![Authentication Screenshot](./screenshots/auth.png)
+![Authentication Screenshot](./app/images/Login.png)
 
 ---
 
