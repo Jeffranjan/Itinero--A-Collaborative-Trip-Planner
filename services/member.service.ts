@@ -4,79 +4,42 @@ import { TripMember } from "@/types/trip";
 
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const TRIP_MEMBERS_COLLECTION = "trip_members";
-const USERS_COLLECTION = "users";
+
+/**
+ * Resolve user name and avatar initial from the current Appwrite session.
+ * Returns { name, avatarInitial } with safe fallbacks.
+ */
+async function resolveUserIdentity(): Promise<{
+  name: string;
+  avatarInitial: string;
+}> {
+  try {
+    const userAccount = await account.get();
+    if (userAccount.name) {
+      return {
+        name: userAccount.name,
+        avatarInitial: userAccount.name.charAt(0).toUpperCase(),
+      };
+    }
+    if (userAccount.email) {
+      const emailName = userAccount.email.split("@")[0] || "Unknown";
+      return {
+        name: emailName,
+        avatarInitial: emailName.charAt(0).toUpperCase(),
+      };
+    }
+  } catch (e) {
+    console.error("Could not fetch account details:", e);
+  }
+  return { name: "Unknown", avatarInitial: "U" };
+}
 
 export const memberService = {
   /**
-   * Self-join a trip via link
-   */
-  async joinTrip(
-    tripId: string,
-    userId: string,
-    role: "viewer" | "editor" = "viewer"
-  ): Promise<TripMember> {
-    try {
-      // 1. Check if already a member
-      const existingMembers = await databases.listDocuments<TripMember>(
-        DATABASE_ID,
-        TRIP_MEMBERS_COLLECTION,
-        [Query.equal("tripId", tripId), Query.equal("userId", userId)]
-      );
-
-      if (existingMembers.documents.length > 0) {
-        throw new Error("You are already a member of this trip.");
-      }
-
-      // 2. Fetch user identity to populate name and avatar
-      let name = "Unknown";
-      let avatarInitial = "?";
-      try {
-        const userAccount = await account.get();
-        if (userAccount.name) {
-          name = userAccount.name;
-          avatarInitial = name
-            .split(" ")
-            .map((n) => n[0])
-            .join("")
-            .toUpperCase()
-            .slice(0, 2);
-        } else {
-          name = userAccount.email.split("@")[0] || "Unknown";
-          avatarInitial = name.slice(0, 2).toUpperCase();
-        }
-      } catch (e) {
-        console.error("Could not fetch account details for joinTrip:", e);
-      }
-
-      // 3. Create trip_member document defaulting to provided role
-      const newMember = await databases.createDocument<TripMember>(
-        DATABASE_ID,
-        TRIP_MEMBERS_COLLECTION,
-        ID.unique(),
-        {
-          tripId,
-          userId,
-          role,
-          name,
-          avatarInitial,
-          joinedAt: new Date().toISOString(),
-        },
-        [
-          Permission.read(Role.any()),
-          Permission.update(Role.user(userId)),
-          Permission.delete(Role.user(userId)),
-        ]
-      );
-
-      return newMember;
-    } catch (error) {
-      console.error("Error joining trip:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * Ensure user is a member of the trip, creating if not exists.
+   * Ensure user is a member of the trip.
+   * - If membership exists with missing metadata, backfill it.
+   * - If membership does not exist, create it.
+   * This is the PRIMARY entry point for all membership creation.
    */
   async ensureMembership(
     tripId: string,
@@ -85,39 +48,46 @@ export const memberService = {
   ): Promise<TripMember> {
     try {
       // 1. Check if already a member
-      const existingMembers = await databases.listDocuments<TripMember>(
+      const existing = await databases.listDocuments<TripMember>(
         DATABASE_ID,
         TRIP_MEMBERS_COLLECTION,
         [Query.equal("tripId", tripId), Query.equal("userId", userId)]
       );
 
-      if (existingMembers.documents.length > 0) {
-        return existingMembers.documents[0];
-      }
+      if (existing.documents.length > 0) {
+        const member = existing.documents[0];
 
-      // 2. Fetch user identity to populate name and avatar
-      let name = "Unknown";
-      let avatarInitial = "??";
-
-      try {
-        const userAccount = await account.get();
-        if (userAccount.name) {
-          name = userAccount.name;
-          avatarInitial = name
-            .split(" ")
-            .map((n) => n[0])
-            .join("")
-            .toUpperCase()
-            .slice(0, 2);
-        } else {
-          name = userAccount.email.split("@")[0] || "Unknown";
-          avatarInitial = name.slice(0, 2).toUpperCase();
+        // Backfill name/avatar if missing or still defaulted
+        if (!member.name || member.name === "Unknown") {
+          const identity = await resolveUserIdentity();
+          if (identity.name !== "Unknown") {
+            try {
+              await databases.updateDocument<TripMember>(
+                DATABASE_ID,
+                TRIP_MEMBERS_COLLECTION,
+                member.$id,
+                {
+                  name: identity.name,
+                  avatarInitial: identity.avatarInitial,
+                }
+              );
+              return {
+                ...member,
+                name: identity.name,
+                avatarInitial: identity.avatarInitial,
+              };
+            } catch (e) {
+              console.error("Could not backfill member name:", e);
+            }
+          }
         }
-      } catch (e) {
-        console.error("Could not fetch account details for membership:", e);
+
+        return member;
       }
 
-      // 3. Create trip_member document
+      // 2. Create new membership
+      const identity = await resolveUserIdentity();
+
       const newMember = await databases.createDocument<TripMember>(
         DATABASE_ID,
         TRIP_MEMBERS_COLLECTION,
@@ -126,8 +96,8 @@ export const memberService = {
           tripId,
           userId,
           role,
-          name,
-          avatarInitial,
+          name: identity.name,
+          avatarInitial: identity.avatarInitial,
           joinedAt: new Date().toISOString(),
         },
         [
@@ -139,15 +109,44 @@ export const memberService = {
 
       return newMember;
     } catch (error) {
-      console.error("Error creating/ensuring membership:", error);
+      console.error("Error in ensureMembership:", error);
       throw error;
     }
   },
 
   /**
-   * Get all members of a trip
+   * Join a trip via invite link.
+   * Delegates to ensureMembership but throws if already a member.
    */
-  async getTripMembers(tripId: string) {
+  async joinTrip(
+    tripId: string,
+    userId: string,
+    role: "viewer" | "editor" = "viewer"
+  ): Promise<TripMember> {
+    // Check for existing membership first
+    const existing = await databases.listDocuments<TripMember>(
+      DATABASE_ID,
+      TRIP_MEMBERS_COLLECTION,
+      [Query.equal("tripId", tripId), Query.equal("userId", userId)]
+    );
+
+    if (existing.documents.length > 0) {
+      // Already a member — backfill if needed, then redirect
+      const member = await this.ensureMembership(tripId, userId, role);
+      throw Object.assign(new Error("You are already a member of this trip."), {
+        member,
+      });
+    }
+
+    // Create via ensureMembership
+    return this.ensureMembership(tripId, userId, role);
+  },
+
+  /**
+   * Get all members of a trip.
+   * Uses the stored name/avatarInitial fields — no cross-collection lookup needed.
+   */
+  async getTripMembers(tripId: string): Promise<TripMember[]> {
     try {
       const members = await databases.listDocuments<TripMember>(
         DATABASE_ID,
@@ -155,31 +154,7 @@ export const memberService = {
         [Query.equal("tripId", tripId)]
       );
 
-      const userIds = members.documents.map((m) => m.userId);
-
-      if (userIds.length === 0) return [];
-
-      // Query the users directory to get names and emails
-      const usersResponse = await databases.listDocuments(
-        DATABASE_ID,
-        USERS_COLLECTION,
-        [Query.equal("$id", userIds)]
-      );
-
-      // Enhance the members array with user details
-      const enrichedMembers = members.documents.map((member) => {
-        const userDetails = usersResponse.documents.find(
-          (u) => u.$id === member.userId
-        );
-        return {
-          ...member,
-          user: userDetails
-            ? { name: userDetails.name, email: userDetails.email }
-            : null,
-        };
-      });
-
-      return enrichedMembers;
+      return members.documents;
     } catch (error) {
       console.error("Error fetching trip members:", error);
       throw error;

@@ -156,17 +156,17 @@ function TripPageContent() {
   const loadRoleAndPresenceData = useCallback(async () => {
     if (!user || !trip) return;
     try {
+      // Always call ensureMembership to create or backfill name/avatar
+      const ensuredMember = await memberService.ensureMembership(
+        tripId,
+        user.$id,
+        trip.createdBy === user.$id ? "owner" : "viewer"
+      );
+
       // Load current user role
       const members = await memberService.getTripMembers(tripId);
-      let member = members.find((m) => m.userId === user.$id);
-
-      if (!member) {
-        member = (await memberService.ensureMembership(
-          tripId,
-          user.$id,
-          "viewer"
-        )) as any;
-      }
+      let member =
+        members.find((m) => m.userId === user.$id) || (ensuredMember as any);
 
       if (member) {
         setCurrentUserRole(member.role);

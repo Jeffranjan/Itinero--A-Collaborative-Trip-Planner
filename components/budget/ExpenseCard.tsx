@@ -6,7 +6,7 @@ import { formatCurrency } from "@/lib/currency";
 
 interface TripMemberInfo {
   userId: string;
-  user?: { name: string };
+  name?: string;
   role: string;
 }
 
@@ -45,7 +45,7 @@ export function ExpenseCard({
   const payer = members.find((m) => m.userId === expense.paidBy);
   const isPayer = expense.paidBy === currentUserId;
 
-  const payerName = isPayer ? "You" : payer?.user?.name || "Unknown";
+  const payerName = isPayer ? "You" : payer?.name || "Unknown";
   const icon = CATEGORY_ICONS[expense.category] || "🧾";
 
   return (

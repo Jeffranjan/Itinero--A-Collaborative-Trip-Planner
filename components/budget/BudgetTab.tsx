@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Plus,
   Wallet,
@@ -19,19 +19,21 @@ import {
 } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { budgetService } from "@/services/budget.service";
 import { memberService } from "@/services/member.service";
-import { ExpenseSplit } from "@/types/expense";
+import { Expense, ExpenseSplit } from "@/types/expense";
 import { Trip } from "@/types/trip";
 import { formatCurrency } from "@/lib/currency";
+import { calculateSplit } from "@/utils/calculateSplit";
+import { calculateSettlements } from "@/utils/calculateSettlements";
 
 import { CreateExpenseModal } from "./CreateExpenseModal";
 import { ExpenseCard } from "./ExpenseCard";
 
 interface TripMemberInfo {
   userId: string;
-  user?: { name: string };
+  name?: string;
   role: string;
 }
 
@@ -65,6 +67,8 @@ export function BudgetTab({
   currentUserId,
   isOwnerOrEditor,
 }: BudgetTabProps) {
+  const queryClient = useQueryClient();
+
   const { data: members = [], isLoading: isLoadingMembers } = useQuery({
     queryKey: ["tripMembers", trip.$id],
     queryFn: async () => {
@@ -98,49 +102,73 @@ export function BudgetTab({
   );
   const isLoading = isLoadingMembers || isLoadingExpenses;
 
-  const handleDelete = async (expenseId: string) => {
-    try {
-      setDeletingId(expenseId);
-      await budgetService.deleteExpense(expenseId);
-      toast.success("Expense deleted");
-    } catch (error) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
+
+  // Delete mutation with optimistic UI and 404-safe error handling
+  const deleteMutation = useMutation({
+    mutationFn: (expenseId: string) => budgetService.deleteExpense(expenseId),
+    onMutate: async (expenseId: string) => {
+      await queryClient.cancelQueries({
+        queryKey: ["tripExpenses", trip.$id],
+      });
+
+      const previousData = queryClient.getQueryData(["tripExpenses", trip.$id]);
+
+      // Optimistic removal
+      queryClient.setQueryData(
+        ["tripExpenses", trip.$id],
+        (old: typeof expensesData) => {
+          if (!old) return old;
+          return {
+            expenses: old.expenses.filter(
+              (exp: Expense) => exp.$id !== expenseId
+            ),
+            splits: old.splits.filter(
+              (s: ExpenseSplit) => s.expenseId !== expenseId
+            ),
+          };
+        }
+      );
+
+      return { previousData };
+    },
+    onError: (error: any, _expenseId, context) => {
+      // If 404, the expense was already deleted (e.g., by a collaborator) — that's OK
+      if (error?.code === 404 || error?.message?.includes("not be found")) {
+        console.warn("Expense already removed by collaborator");
+        return;
+      }
+
+      // Rollback optimistic update on real errors
+      if (context?.previousData) {
+        queryClient.setQueryData(
+          ["tripExpenses", trip.$id],
+          context.previousData
+        );
+      }
       toast.error("Failed to delete expense");
-    } finally {
-      setDeletingId(null);
-    }
+    },
+    onSuccess: () => {
+      toast.success("Expense deleted");
+      queryClient.invalidateQueries({ queryKey: ["tripExpenses", trip.$id] });
+    },
+  });
+
+  const handleDelete = (expenseId: string) => {
+    deleteMutation.mutate(expenseId);
   };
 
-  // Derived calculations
-  const summary = useMemo(() => {
-    let totalSpent = 0;
-    let totalPaid = 0;
-    let totalOwed = 0;
-    const categoryTotals: Record<string, number> = {};
+  // Called when CreateExpenseModal successfully creates or updates an expense
+  const handleExpenseChange = () => {
+    queryClient.invalidateQueries({ queryKey: ["tripExpenses", trip.$id] });
+  };
 
-    expenses.forEach((exp) => {
-      totalSpent += exp.amount;
-
-      // Calculate my payments
-      if (exp.paidBy === currentUserId) {
-        totalPaid += exp.amount;
-      }
-
-      // Chart mapping
-      categoryTotals[exp.category] =
-        (categoryTotals[exp.category] || 0) + exp.amount;
-    });
-
-    // Calculate my share owed
-    splits.forEach((split) => {
-      if (split.userId === currentUserId) {
-        totalOwed += split.amountOwed;
-      }
-    });
-
-    const balance = totalPaid - totalOwed;
-
-    return { totalSpent, totalPaid, totalOwed, balance, categoryTotals };
-  }, [expenses, splits, currentUserId]);
+  // Use centralized split calculation helper
+  const summary = useMemo(
+    () => calculateSplit(expenses, splits, members, currentUserId),
+    [expenses, splits, members, currentUserId]
+  );
 
   const chartData = useMemo(() => {
     return Object.entries(summary.categoryTotals).map(([name, value]) => ({
@@ -201,10 +229,7 @@ export function BudgetTab({
             <h3 className="text-sm font-medium">Trip Total</h3>
           </div>
           <p className="relative z-10 mt-4 text-3xl font-bold text-white">
-            <AnimatedCurrency
-              value={summary.totalSpent}
-              currency={trip.currency}
-            />
+            <AnimatedCurrency value={summary.total} currency={trip.currency} />
           </p>
         </motion.div>
 
@@ -259,16 +284,16 @@ export function BudgetTab({
           </div>
           <p
             className={`relative z-10 mt-4 text-3xl font-bold ${
-              summary.balance > 0
+              summary.userBalance > 0
                 ? "text-emerald-400"
-                : summary.balance < 0
+                : summary.userBalance < 0
                   ? "text-accent-orange"
                   : "text-white"
             }`}
           >
-            {summary.balance > 0 ? "+" : ""}
+            {summary.userBalance > 0 ? "+" : ""}
             <AnimatedCurrency
-              value={summary.balance}
+              value={summary.userBalance}
               currency={trip.currency}
             />
           </p>
@@ -323,7 +348,10 @@ export function BudgetTab({
                         setIsModalOpen(true);
                       }}
                       onDelete={handleDelete}
-                      isDeleting={deletingId === expense.$id}
+                      isDeleting={
+                        deleteMutation.isPending &&
+                        deleteMutation.variables === expense.$id
+                      }
                       canEdit={isOwnerOrEditor}
                       userShare={mySplit ? mySplit.amountOwed : null}
                       currency={trip.currency}
@@ -392,12 +420,67 @@ export function BudgetTab({
         </div>
       </div>
 
+      {/* Settle Up Section */}
+      {(() => {
+        const settlements = calculateSettlements(summary.balances);
+        if (settlements.length === 0) return null;
+
+        const getName = (userId: string) => {
+          if (userId === currentUserId) return "You";
+          const member = members.find((m) => m.userId === userId);
+          return member?.name || "Unknown";
+        };
+
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="space-y-4"
+          >
+            <h2 className="text-2xl font-bold text-white">Settle Up</h2>
+            <div className="space-y-3">
+              {settlements.map((s, i) => (
+                <motion.div
+                  key={`${s.fromUserId}-${s.toUserId}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.5 + i * 0.1 }}
+                  className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/5 p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-orange/20 text-sm font-bold text-accent-orange">
+                      {getName(s.fromUserId).charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-400">
+                        <span className="font-medium text-white">
+                          {getName(s.fromUserId)}
+                        </span>
+                        {" owes "}
+                        <span className="font-medium text-white">
+                          {getName(s.toUserId)}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-lg font-bold text-accent-orange">
+                    {formatCurrency(s.amount, trip.currency)}
+                  </span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        );
+      })()}
+
       <CreateExpenseModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
           setExpenseToEdit(null);
         }}
+        onSuccess={handleExpenseChange}
         trip={trip}
         members={members}
         currentUserId={currentUserId}

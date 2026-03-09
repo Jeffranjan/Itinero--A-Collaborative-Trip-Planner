@@ -57,17 +57,12 @@ function JoinTripContent() {
 
     try {
       setIsJoining(true);
-      await memberService.joinTrip(tripId, user.$id, joiningRole);
+      await memberService.ensureMembership(tripId, user.$id, joiningRole);
       toast.success(`Successfully joined the trip as ${joiningRole}!`);
       router.push(`/trip/${tripId}`);
     } catch (error: any) {
       console.error("Failed to join:", error);
       toast.error(error.message || "Failed to join trip.");
-
-      // If they are already a member, just route them there.
-      if (error.message?.includes("already a member")) {
-        router.push(`/trip/${tripId}`);
-      }
     } finally {
       setIsJoining(false);
     }

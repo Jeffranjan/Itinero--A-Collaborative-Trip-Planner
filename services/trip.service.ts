@@ -1,5 +1,5 @@
 import { ID, Query, Permission, Role } from "appwrite";
-import { databases } from "@/lib/appwrite";
+import { databases, account } from "@/lib/appwrite";
 import { Trip, TripDay, TripMember, CreateTripInput } from "@/types/trip";
 
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
@@ -30,7 +30,23 @@ export const tripService = {
         ]
       );
 
-      // 2. Add user as trip owner
+      // 2. Fetch user identity to populate name and avatar
+      let name = "Unknown";
+      let avatarInitial = "U";
+      try {
+        const userAccount = await account.get();
+        if (userAccount.name) {
+          name = userAccount.name;
+          avatarInitial = name.charAt(0).toUpperCase();
+        } else if (userAccount.email) {
+          name = userAccount.email.split("@")[0] || "Unknown";
+          avatarInitial = name.charAt(0).toUpperCase();
+        }
+      } catch (e) {
+        console.error("Could not fetch account details for createTrip:", e);
+      }
+
+      // 3. Add user as trip owner
       await databases.createDocument<TripMember>(
         DATABASE_ID,
         TRIP_MEMBERS_COLLECTION,
@@ -39,7 +55,15 @@ export const tripService = {
           tripId: trip.$id,
           userId: userId,
           role: "owner",
-        }
+          name,
+          avatarInitial,
+          joinedAt: new Date().toISOString(),
+        },
+        [
+          Permission.read(Role.any()),
+          Permission.update(Role.user(userId)),
+          Permission.delete(Role.user(userId)),
+        ]
       );
 
       return trip;

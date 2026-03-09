@@ -3,20 +3,26 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Receipt, Users, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { budgetService } from "@/services/budget.service";
-import { ExpenseCategory, Expense } from "@/types/expense";
+import {
+  ExpenseCategory,
+  Expense,
+  CreateExpensePayload,
+} from "@/types/expense";
 import { Trip } from "@/types/trip";
 import { getCurrencySymbol } from "@/lib/currency";
 import { toast } from "sonner";
+import { useMutation } from "@tanstack/react-query";
 
 interface TripMemberInfo {
   userId: string;
-  user?: { name: string };
+  name?: string;
   role: string;
 }
 
 interface CreateExpenseModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   trip: Trip;
   members: TripMemberInfo[];
   currentUserId: string;
@@ -36,6 +42,7 @@ const CATEGORIES: { label: string; value: ExpenseCategory }[] = [
 export function CreateExpenseModal({
   isOpen,
   onClose,
+  onSuccess,
   trip,
   members,
   currentUserId,
@@ -49,7 +56,40 @@ export function CreateExpenseModal({
   const [paidBy, setPaidBy] = useState(currentUserId);
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Create mutation
+  const createMutation = useMutation({
+    mutationFn: (payload: { data: CreateExpensePayload; userId: string }) =>
+      budgetService.createExpense(payload.data, payload.userId),
+    onSuccess: () => {
+      toast.success("Expense added successfully");
+      onSuccess?.();
+      onClose();
+    },
+    onError: (error) => {
+      console.error("Failed to create expense:", error);
+      toast.error("Failed to add expense");
+    },
+  });
+
+  // Update mutation
+  const updateMutation = useMutation({
+    mutationFn: (payload: {
+      expenseId: string;
+      data: Partial<CreateExpensePayload>;
+    }) => budgetService.updateExpense(payload.expenseId, payload.data),
+    onSuccess: () => {
+      toast.success("Expense updated successfully");
+      onSuccess?.();
+      onClose();
+    },
+    onError: (error) => {
+      console.error("Failed to update expense:", error);
+      toast.error("Failed to update expense");
+    },
+  });
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   // Initialize defaults when modal opens
   useEffect(() => {
@@ -92,58 +132,52 @@ export function CreateExpenseModal({
       return;
     }
 
-    try {
-      setIsSubmitting(true);
+    const expenseData = {
+      title: title.trim(),
+      amount: Number(amount),
+      currency: trip.currency || "INR",
+      category,
+      paidBy,
+      date: new Date(date).toISOString(),
+      notes: notes.trim(),
+      splitBetween,
+    };
 
-      if (expenseToEdit) {
-        await budgetService.updateExpense(expenseToEdit.$id, {
-          title: title.trim(),
-          amount: Number(amount),
-          currency: trip.currency || "INR",
-          category,
-          paidBy,
-          date: new Date(date).toISOString(),
-          notes: notes.trim(),
-          splitBetween,
-        });
-        toast.success("Expense updated successfully");
-      } else {
-        await budgetService.createExpense(
-          {
-            tripId: trip.$id,
-            title: title.trim(),
-            amount: Number(amount),
-            currency: trip.currency || "INR",
-            category,
-            paidBy,
-            date: new Date(date).toISOString(),
-            notes: notes.trim(),
-            splitBetween,
-          },
-          currentUserId
-        );
-        toast.success("Expense added successfully");
-      }
-
-      onClose();
-    } catch (error) {
-      console.error("Failed to save expense:", error);
-      toast.error("Failed to save expense");
-    } finally {
-      setIsSubmitting(false);
+    if (expenseToEdit) {
+      updateMutation.mutate({
+        expenseId: expenseToEdit.$id,
+        data: expenseData,
+      });
+    } else {
+      createMutation.mutate({
+        data: { ...expenseData, tripId: trip.$id },
+        userId: currentUserId,
+      });
     }
   };
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 font-[family-name:var(--font-geist-sans)]">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto px-4 pb-8 pt-24 font-[family-name:var(--font-geist-sans)]">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
           />
 
           <motion.div
@@ -233,7 +267,11 @@ export function CreateExpenseModal({
                       className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-white focus:border-accent-orange focus:outline-none focus:ring-1 focus:ring-accent-orange"
                     >
                       {CATEGORIES.map((c) => (
-                        <option key={c.value} value={c.value}>
+                        <option
+                          key={c.value}
+                          value={c.value}
+                          className="bg-neutral-800 text-white"
+                        >
                           {c.label}
                         </option>
                       ))}
@@ -264,10 +302,14 @@ export function CreateExpenseModal({
                     className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-white focus:border-accent-orange focus:outline-none focus:ring-1 focus:ring-accent-orange"
                   >
                     {members.map((m) => (
-                      <option key={m.userId} value={m.userId}>
+                      <option
+                        key={m.userId}
+                        value={m.userId}
+                        className="bg-neutral-800 text-white"
+                      >
                         {m.userId === currentUserId
                           ? "Me"
-                          : m.user?.name || "Unknown"}
+                          : m.name || "Unknown"}
                       </option>
                     ))}
                   </select>
@@ -300,7 +342,7 @@ export function CreateExpenseModal({
                           )}
                           {m.userId === currentUserId
                             ? "Me"
-                            : m.user?.name || "Unknown"}
+                            : m.name || "Unknown"}
                         </button>
                       );
                     })}
