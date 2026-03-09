@@ -23,6 +23,7 @@ You can watch a walkthrough demo here:
 👉 Demo Video Link (Add your video link here)
 
 Example options:
+
 - Loom
 - YouTube
 - Screen recording
@@ -54,10 +55,36 @@ Example options:
 ![Trip Collaboration Screenshot](./app/images/Collaboration.png)
 
 ---
-                    
+
 ## Authentication Flow
 
-![Authentication Screenshot](./app/images/Login.png)
+![Authentication Screenshot](./app/images/Auth.png)
+
+---
+
+## Checklist
+
+![Checklist Screenshot](./app/images/Checklist.png)
+
+---
+
+## Reservations
+
+![Reservations Screenshot](./app/images/Reservations1.png)
+
+![Reservations Screenshot](./app/images/Reservations2.png)
+
+---
+
+## Trip Documents
+
+![Trip Documents Screenshot](./app/images/TripDocuments.png)
+
+---
+
+## Budget & Expenses
+
+![Budget & Expenses Screenshot](./app/images/Budget&Expanses.png)
 
 ---
 
