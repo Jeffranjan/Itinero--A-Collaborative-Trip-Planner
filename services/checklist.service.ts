@@ -8,16 +8,13 @@ const CHECKLIST_ITEMS_COLLECTION = "checklist_items";
 const CHECKLIST_ITEM_COMPLETIONS_COLLECTION = "checklist_item_completions";
 
 export const checklistService = {
-  /**
-   * Creates a new checklist for a trip
-   */
   async createChecklist(
     tripId: string,
     title: string,
     userId: string
   ): Promise<TripChecklist> {
     try {
-      // Find the current max order for this trip to append to the end
+      // Append to end of existing checklists
       const existing = await databases.listDocuments<TripChecklist>(
         DATABASE_ID,
         CHECKLISTS_COLLECTION,
@@ -48,9 +45,6 @@ export const checklistService = {
     }
   },
 
-  /**
-   * Fetches all checklists for a specific trip
-   */
   async getTripChecklists(tripId: string): Promise<TripChecklist[]> {
     try {
       const resp = await databases.listDocuments<TripChecklist>(
@@ -69,12 +63,9 @@ export const checklistService = {
     }
   },
 
-  /**
-   * Deletes a checklist and all its items
-   */
   async deleteChecklist(checklistId: string): Promise<void> {
     try {
-      // Cleanup items first (Handling max 100 items per list for simplistic bulk deletion)
+      // Delete all items first
       const items = await databases.listDocuments<ChecklistItem>(
         DATABASE_ID,
         CHECKLIST_ITEMS_COLLECTION,
@@ -89,7 +80,6 @@ export const checklistService = {
         );
       }
 
-      // Delete the checklist itself
       await databases.deleteDocument(
         DATABASE_ID,
         CHECKLISTS_COLLECTION,
@@ -101,9 +91,6 @@ export const checklistService = {
     }
   },
 
-  /**
-   * Creates a new item inside a checklist
-   */
   async createChecklistItem(
     checklistId: string,
     text: string,
@@ -140,9 +127,6 @@ export const checklistService = {
     }
   },
 
-  /**
-   * Fetches items for a specific checklist
-   */
   async getChecklistItems(checklistId: string): Promise<ChecklistItem[]> {
     try {
       const resp = await databases.listDocuments<ChecklistItem>(
@@ -161,9 +145,6 @@ export const checklistService = {
     }
   },
 
-  /**
-   * Updates an existing checklist item
-   */
   async updateChecklistItem(
     itemId: string,
     payload: Partial<Omit<ChecklistItem, keyof Models.Document>>
@@ -181,9 +162,6 @@ export const checklistService = {
     }
   },
 
-  /**
-   * Deletes a checklist item
-   */
   async deleteChecklistItem(itemId: string): Promise<void> {
     try {
       await databases.deleteDocument(
@@ -197,14 +175,10 @@ export const checklistService = {
     }
   },
 
-  /**
-   * Reorders multiple items
-   */
   async reorderChecklistItems(
     items: { id: string; order: number }[]
   ): Promise<void> {
     try {
-      // Fire updates in parallel
       await Promise.all(
         items.map((item) =>
           databases.updateDocument(
@@ -223,9 +197,6 @@ export const checklistService = {
     }
   },
 
-  /**
-   * Fetches user completions for specific items
-   */
   async getUserItemCompletions(userId: string, itemIds: string[]) {
     if (itemIds.length === 0) return [];
     try {
@@ -245,9 +216,6 @@ export const checklistService = {
     }
   },
 
-  /**
-   * Toggles completion for a user on a specific item
-   */
   async toggleItemCompletion(
     itemId: string,
     userId: string,

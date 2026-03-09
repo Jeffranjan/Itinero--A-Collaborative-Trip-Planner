@@ -16,20 +16,6 @@ Instead of using scattered spreadsheets, chats, or notes, Itinero provides a cen
 
 ---
 
-# 🎥 Demo
-
-You can watch a walkthrough demo here:
-
-👉 Demo Video Link (Add your video link here)
-
-Example options:
-
-- Loom
-- YouTube
-- Screen recording
-
----
-
 # 📸 Screenshots
 
 ## Home Page

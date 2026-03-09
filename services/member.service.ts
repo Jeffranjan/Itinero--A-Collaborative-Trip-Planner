@@ -5,10 +5,7 @@ import { TripMember } from "@/types/trip";
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const TRIP_MEMBERS_COLLECTION = "trip_members";
 
-/**
- * Resolve user name and avatar initial from the current Appwrite session.
- * Returns { name, avatarInitial } with safe fallbacks.
- */
+/** Resolves name and avatar from the current Appwrite session. */
 async function resolveUserIdentity(): Promise<{
   name: string;
   avatarInitial: string;
@@ -35,19 +32,12 @@ async function resolveUserIdentity(): Promise<{
 }
 
 export const memberService = {
-  /**
-   * Ensure user is a member of the trip.
-   * - If membership exists with missing metadata, backfill it.
-   * - If membership does not exist, create it.
-   * This is the PRIMARY entry point for all membership creation.
-   */
   async ensureMembership(
     tripId: string,
     userId: string,
     role: "owner" | "editor" | "viewer" = "viewer"
   ): Promise<TripMember> {
     try {
-      // 1. Check if already a member
       const existing = await databases.listDocuments<TripMember>(
         DATABASE_ID,
         TRIP_MEMBERS_COLLECTION,
@@ -57,7 +47,7 @@ export const memberService = {
       if (existing.documents.length > 0) {
         const member = existing.documents[0];
 
-        // Backfill name/avatar if missing or still defaulted
+        // Backfill name/avatar if empty
         if (!member.name || member.name === "Unknown") {
           const identity = await resolveUserIdentity();
           if (identity.name !== "Unknown") {
@@ -85,7 +75,6 @@ export const memberService = {
         return member;
       }
 
-      // 2. Create new membership
       const identity = await resolveUserIdentity();
 
       const newMember = await databases.createDocument<TripMember>(
@@ -114,16 +103,11 @@ export const memberService = {
     }
   },
 
-  /**
-   * Join a trip via invite link.
-   * Delegates to ensureMembership but throws if already a member.
-   */
   async joinTrip(
     tripId: string,
     userId: string,
     role: "viewer" | "editor" = "viewer"
   ): Promise<TripMember> {
-    // Check for existing membership first
     const existing = await databases.listDocuments<TripMember>(
       DATABASE_ID,
       TRIP_MEMBERS_COLLECTION,
@@ -131,21 +115,15 @@ export const memberService = {
     );
 
     if (existing.documents.length > 0) {
-      // Already a member — backfill if needed, then redirect
       const member = await this.ensureMembership(tripId, userId, role);
       throw Object.assign(new Error("You are already a member of this trip."), {
         member,
       });
     }
 
-    // Create via ensureMembership
     return this.ensureMembership(tripId, userId, role);
   },
 
-  /**
-   * Get all members of a trip.
-   * Uses the stored name/avatarInitial fields — no cross-collection lookup needed.
-   */
   async getTripMembers(tripId: string): Promise<TripMember[]> {
     try {
       const members = await databases.listDocuments<TripMember>(
@@ -161,9 +139,6 @@ export const memberService = {
     }
   },
 
-  /**
-   * Update a member's role
-   */
   async updateMemberRole(memberId: string, role: "editor" | "viewer") {
     try {
       return await databases.updateDocument<TripMember>(
@@ -178,9 +153,6 @@ export const memberService = {
     }
   },
 
-  /**
-   * Remove a member
-   */
   async removeMember(memberId: string) {
     try {
       await databases.deleteDocument(

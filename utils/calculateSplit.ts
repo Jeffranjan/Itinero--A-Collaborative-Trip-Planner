@@ -15,10 +15,7 @@ interface SplitResult {
   categoryTotals: Record<string, number>;
 }
 
-/**
- * Centralized expense split calculations.
- * Computes totals, per-user paid/owed, balances, and category breakdowns.
- */
+/** Computes per-user paid/owed balances and category totals. */
 export function calculateSplit(
   expenses: Expense[],
   splits: ExpenseSplit[],

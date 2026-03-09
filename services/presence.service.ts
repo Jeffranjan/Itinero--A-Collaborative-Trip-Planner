@@ -15,16 +15,12 @@ export interface TripPresence extends Models.Document {
 }
 
 export const presenceService = {
-  /**
-   * Set or update presence for a user in a trip
-   */
   async upsertPresence(
     data: Omit<TripPresence, keyof Models.Document | "lastSeen">
   ): Promise<TripPresence> {
     try {
       const now = new Date().toISOString();
 
-      // Check if presence document already exists for this user in this trip
       const existing = await databases.listDocuments<TripPresence>(
         DATABASE_ID,
         COLLECTION_ID,
@@ -32,7 +28,6 @@ export const presenceService = {
       );
 
       if (existing.documents.length > 0) {
-        // Update existing presence
         const docId = existing.documents[0].$id;
         try {
           return await databases.updateDocument<TripPresence>(
@@ -45,12 +40,11 @@ export const presenceService = {
             }
           );
         } catch (error: any) {
-          // If the document was deleted by the unmount cleanup right before this update, simply fall through to create a new one.
+          // Doc was deleted between read and update — create a new one below
           if (error?.code !== 404) throw error;
         }
       }
 
-      // Create new presence document
       return await databases.createDocument<TripPresence>(
         DATABASE_ID,
         COLLECTION_ID,
@@ -71,9 +65,6 @@ export const presenceService = {
     }
   },
 
-  /**
-   * Update the status and optionally editingDayId of existing presence
-   */
   async updateStatus(
     tripId: string,
     userId: string,
@@ -110,9 +101,6 @@ export const presenceService = {
     }
   },
 
-  /**
-   * Update the lastSeen timestamp (heartbeat)
-   */
   async updateHeartbeat(tripId: string, userId: string) {
     try {
       const existing = await databases.listDocuments<TripPresence>(
@@ -142,9 +130,6 @@ export const presenceService = {
     }
   },
 
-  /**
-   * Remove a user's presence from a trip
-   */
   async removePresence(tripId: string, userId: string) {
     try {
       const existing = await databases.listDocuments<TripPresence>(
@@ -154,7 +139,7 @@ export const presenceService = {
       );
 
       if (existing.documents.length > 0) {
-        // Can be multiple if race conditions occurred, delete all
+        // Delete all (may have duplicates from race conditions)
         for (const doc of existing.documents) {
           await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, doc.$id);
         }
@@ -164,9 +149,6 @@ export const presenceService = {
     }
   },
 
-  /**
-   * Remove a user's presence instantly by its known Document ID
-   */
   async removePresenceById(docId: string) {
     try {
       await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, docId);
@@ -175,9 +157,7 @@ export const presenceService = {
     }
   },
 
-  /**
-   * Get all active presences for a trip (culling stale ones is handled here and on client)
-   */
+  /** Returns presences updated within the last 30s. */
   async getTripPresence(tripId: string) {
     try {
       const response = await databases.listDocuments<TripPresence>(

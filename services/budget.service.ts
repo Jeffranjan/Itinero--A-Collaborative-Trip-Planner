@@ -7,9 +7,6 @@ const EXPENSES_COLLECTION = "trip_expenses";
 const EXPENSE_SPLITS_COLLECTION = "expense_splits";
 
 export const budgetService = {
-  /**
-   * Creates a new expense and automatically calculates & generates splits
-   */
   async createExpense(
     payload: CreateExpensePayload,
     userId: string
@@ -17,7 +14,6 @@ export const budgetService = {
     try {
       const { splitBetween, ...expenseData } = payload;
 
-      // 1. Create the expense document
       const expense = await databases.createDocument<Expense>(
         DATABASE_ID,
         EXPENSES_COLLECTION,
@@ -30,11 +26,9 @@ export const budgetService = {
         }
       );
 
-      // 2. Calculate split amounts
       const splitAmount = expenseData.amount / splitBetween.length;
       const splits: ExpenseSplit[] = [];
 
-      // 3. Create expense splits
       for (const splitUserId of splitBetween) {
         const split = await databases.createDocument<ExpenseSplit>(
           DATABASE_ID,
@@ -56,9 +50,6 @@ export const budgetService = {
     }
   },
 
-  /**
-   * Fetches all expenses for a specific trip
-   */
   async getTripExpenses(tripId: string): Promise<Expense[]> {
     try {
       const expenses = await databases.listDocuments<Expense>(
@@ -73,9 +64,6 @@ export const budgetService = {
     }
   },
 
-  /**
-   * Fetches splits for a specific expense
-   */
   async getExpenseSplits(expenseId: string): Promise<ExpenseSplit[]> {
     try {
       const splits = await databases.listDocuments<ExpenseSplit>(
@@ -90,12 +78,8 @@ export const budgetService = {
     }
   },
 
-  /**
-   * Deletes an expense and its associated splits
-   */
   async deleteExpense(expenseId: string): Promise<void> {
     try {
-      // 1. Find and delete all associated splits
       const splits = await this.getExpenseSplits(expenseId);
       for (const split of splits) {
         await databases.deleteDocument(
@@ -105,7 +89,6 @@ export const budgetService = {
         );
       }
 
-      // 2. Delete the expense itself
       await databases.deleteDocument(
         DATABASE_ID,
         EXPENSES_COLLECTION,
@@ -117,9 +100,6 @@ export const budgetService = {
     }
   },
 
-  /**
-   * Updates an expense
-   */
   async updateExpense(
     expenseId: string,
     data: Partial<CreateExpensePayload>
@@ -127,7 +107,6 @@ export const budgetService = {
     try {
       const { splitBetween, ...updateData } = data;
 
-      // 1. Update the main expense document
       const expense = await databases.updateDocument<Expense>(
         DATABASE_ID,
         EXPENSES_COLLECTION,
@@ -137,9 +116,8 @@ export const budgetService = {
 
       let splits: ExpenseSplit[] = [];
 
-      // 2. If splitBetween and amount are provided, we should recalculate and recreate splits
+      // Recalculate splits if split members or amount changed
       if (splitBetween && updateData.amount !== undefined) {
-        // Delete old splits
         const oldSplits = await this.getExpenseSplits(expenseId);
         for (const split of oldSplits) {
           await databases.deleteDocument(
@@ -149,7 +127,6 @@ export const budgetService = {
           );
         }
 
-        // Create new splits
         const splitAmount = updateData.amount / splitBetween.length;
         for (const splitUserId of splitBetween) {
           const split = await databases.createDocument<ExpenseSplit>(
@@ -165,7 +142,6 @@ export const budgetService = {
           splits.push(split);
         }
       } else {
-        // Keep existing splits if no split details were changed
         splits = await this.getExpenseSplits(expenseId);
       }
 

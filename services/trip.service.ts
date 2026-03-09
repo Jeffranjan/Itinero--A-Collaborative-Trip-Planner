@@ -8,12 +8,8 @@ const TRIP_MEMBERS_COLLECTION = "trip_members";
 const TRIP_DAYS_COLLECTION = "trip_days";
 
 export const tripService = {
-  /**
-   * Creates a new trip and adds the creator as the owner.
-   */
   async createTrip(data: CreateTripInput, userId: string): Promise<Trip> {
     try {
-      // 1. Create the trip document
       const trip = await databases.createDocument<Trip>(
         DATABASE_ID,
         TRIPS_COLLECTION,
@@ -30,7 +26,6 @@ export const tripService = {
         ]
       );
 
-      // 2. Fetch user identity to populate name and avatar
       let name = "Unknown";
       let avatarInitial = "U";
       try {
@@ -46,7 +41,6 @@ export const tripService = {
         console.error("Could not fetch account details for createTrip:", e);
       }
 
-      // 3. Add user as trip owner
       await databases.createDocument<TripMember>(
         DATABASE_ID,
         TRIP_MEMBERS_COLLECTION,
@@ -73,12 +67,9 @@ export const tripService = {
     }
   },
 
-  /**
-   * Fetches all trips belonging to a user
-   */
   async getUserTrips(userId: string): Promise<Trip[]> {
     try {
-      // First find all memberships for this user
+      // Find trips through memberships (includes shared trips)
       const memberships = await databases.listDocuments<TripMember>(
         DATABASE_ID,
         TRIP_MEMBERS_COLLECTION,
@@ -89,13 +80,7 @@ export const tripService = {
         return [];
       }
 
-      // Get the tripIds
       const tripIds = memberships.documents.map((m) => m.tripId);
-
-      // Fetch the actual trips
-      // Appwrite's max queries in OR/equal might be limited, but for small arrays it's fine.
-      // Another approach is just querying trips where createdBy = userId, but this doesn't include shared trips.
-      // For now, let's query the trips matching the IDs.
       const trips = await databases.listDocuments<Trip>(
         DATABASE_ID,
         TRIPS_COLLECTION,
@@ -109,9 +94,6 @@ export const tripService = {
     }
   },
 
-  /**
-   * Gets a specific trip by ID
-   */
   async getTrip(tripId: string): Promise<Trip> {
     try {
       return await databases.getDocument<Trip>(
@@ -125,13 +107,9 @@ export const tripService = {
     }
   },
 
-  /**
-   * Deletes a trip entirely
-   */
   async deleteTrip(tripId: string): Promise<void> {
     try {
-      // Normally, you might also want to delete related trip_members and trip_days.
-      // Assuming Appwrite relations or manual cleanup. For now, we will manually clean up.
+      // Clean up related documents before deleting the trip
 
       const relatedMembers = await databases.listDocuments(
         DATABASE_ID,
@@ -168,9 +146,6 @@ export const tripService = {
     }
   },
 
-  /**
-   * Update an existing trip
-   */
   async updateTrip(
     tripId: string,
     data: Partial<CreateTripInput>
@@ -188,9 +163,6 @@ export const tripService = {
     }
   },
 
-  /**
-   * Adds a day to a trip
-   */
   async addTripDay(
     tripId: string,
     date: string,
@@ -206,8 +178,6 @@ export const tripService = {
           date,
           orderIndex,
         }
-        // Inheriting permissions from trip members would be ideal.
-        // For now, these are restricted depending on user rules or default DB permissions.
       );
     } catch (error) {
       console.error("Error adding trip day:", error);
@@ -215,9 +185,6 @@ export const tripService = {
     }
   },
 
-  /**
-   * Get days for a trip
-   */
   async getTripDays(tripId: string): Promise<TripDay[]> {
     try {
       const days = await databases.listDocuments<TripDay>(
@@ -232,9 +199,6 @@ export const tripService = {
     }
   },
 
-  /**
-   * Updates a trip day
-   */
   async updateTripDay(dayId: string, data: Partial<TripDay>): Promise<TripDay> {
     try {
       return await databases.updateDocument<TripDay>(
@@ -249,9 +213,6 @@ export const tripService = {
     }
   },
 
-  /**
-   * Deletes a trip day
-   */
   async deleteTripDay(dayId: string): Promise<void> {
     try {
       await databases.deleteDocument(DATABASE_ID, TRIP_DAYS_COLLECTION, dayId);

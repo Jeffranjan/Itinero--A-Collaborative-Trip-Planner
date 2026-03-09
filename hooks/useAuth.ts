@@ -22,7 +22,7 @@ export function useAuth() {
         setUser(null);
       }
     } catch (error) {
-      // 401 errors are expected when the user is not logged in.
+      // Not logged in
       setUser(null);
     } finally {
       setIsFetching(false);

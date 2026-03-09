@@ -19,16 +19,12 @@ export interface RoleRequest extends Models.Document {
 }
 
 export const roleRequestService = {
-  /**
-   * Create a new role request (e.g., Viewer to Editor)
-   */
   async createRoleRequest(
     tripId: string,
     userId: string,
     requestedRole: "editor" | "owner" = "editor"
   ): Promise<RoleRequest> {
     try {
-      // Check if a pending request already exists for this user in this trip
       const existing = await this.checkPendingRequestExists(tripId, userId);
       if (existing) {
         throw new Error("You already have a pending request for this trip.");
@@ -59,9 +55,6 @@ export const roleRequestService = {
     }
   },
 
-  /**
-   * Check if a pending request exists
-   */
   async checkPendingRequestExists(
     tripId: string,
     userId: string
@@ -79,13 +72,10 @@ export const roleRequestService = {
       return response.documents.length > 0;
     } catch (error) {
       console.error("Error checking pending request:", error);
-      return false; // Fail safe to false, but errors during create will catch it anyway
+      return false;
     }
   },
 
-  /**
-   * Get all pending requests for a specific trip (For the Owner)
-   */
   async getPendingRequestsForTrip(tripId: string): Promise<RoleRequest[]> {
     try {
       const response = await databases.listDocuments<RoleRequest>(
@@ -98,7 +88,6 @@ export const roleRequestService = {
 
       const userIds = response.documents.map((req) => req.userId);
 
-      // Fetch user details to enrich the request payload for the UI
       const usersResponse = await databases.listDocuments(
         DATABASE_ID,
         USERS_COLLECTION,
@@ -122,19 +111,14 @@ export const roleRequestService = {
     }
   },
 
-  /**
-   * Approve a role request
-   */
   async approveRoleRequest(
     requestId: string,
     memberDocumentId: string,
     newRole: "editor" | "viewer"
   ): Promise<void> {
     try {
-      // 1. Update the actual member record in memberService
       await memberService.updateMemberRole(memberDocumentId, newRole);
 
-      // 2. Mark the request as approved
       await databases.updateDocument(
         DATABASE_ID,
         ROLE_REQUESTS_COLLECTION,
@@ -149,9 +133,6 @@ export const roleRequestService = {
     }
   },
 
-  /**
-   * Reject a role request
-   */
   async rejectRoleRequest(requestId: string): Promise<void> {
     try {
       await databases.updateDocument(

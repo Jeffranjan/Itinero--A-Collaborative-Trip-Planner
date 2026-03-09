@@ -6,19 +6,12 @@ const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const RESERVATIONS_COLLECTION = "trip_reservations";
 
 export const reservationService = {
-  /**
-   * Fetch all reservations for a specific trip, ordered by start date (if possible) or creation.
-   */
   async getTripReservations(tripId: string): Promise<TripReservation[]> {
     try {
       const response = await databases.listDocuments<TripReservation>(
         DATABASE_ID,
         RESERVATIONS_COLLECTION,
-        [
-          Query.equal("tripId", tripId),
-          Query.orderAsc("startDate"), // Order by start date
-          Query.limit(100),
-        ]
+        [Query.equal("tripId", tripId), Query.limit(100)]
       );
       return response.documents;
     } catch (error) {
@@ -27,9 +20,6 @@ export const reservationService = {
     }
   },
 
-  /**
-   * Create a new reservation for a trip.
-   */
   async createReservation(
     tripId: string,
     payload:
@@ -46,15 +36,14 @@ export const reservationService = {
         >
       | any,
     userId: string,
-    // Note: Trip editors can edit/delete, trip members can only read
     editors: string[],
     members: string[]
   ): Promise<TripReservation> {
     try {
       const permissions = [
-        Permission.read(Role.any()), // Allow anyone with access to read
-        Permission.update(Role.users()), // Allow authenticated users to update
-        Permission.delete(Role.users()), // Allow authenticated users to delete
+        Permission.read(Role.any()),
+        Permission.update(Role.users()),
+        Permission.delete(Role.users()),
       ];
 
       const documentData = {
@@ -76,9 +65,6 @@ export const reservationService = {
     }
   },
 
-  /**
-   * Update an existing reservation.
-   */
   async updateReservation(
     reservationId: string,
     payload: Partial<
@@ -109,9 +95,6 @@ export const reservationService = {
     }
   },
 
-  /**
-   * Delete a reservation.
-   */
   async deleteReservation(reservationId: string): Promise<void> {
     try {
       await databases.deleteDocument(

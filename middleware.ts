@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Explicitly bypass auth guard for login and verification pages
+  // Allow public auth pages through
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/verify-email") ||
@@ -13,15 +13,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Auth validation via middleware is disabled for localhost
-  // because Appwrite uses localStorage which edge middleware cannot read.
-  // We now rely solely on a client-side <AuthGuard /> for route protection.
+  // Appwrite uses localStorage which edge middleware can't access.
+  // Route protection is handled client-side by <AuthGuard />.
 
-  // 4. Session exists, allow request to proceed (Client-side useAuth will handle email verification check)
   return NextResponse.next();
 }
 
-// Config matcher protects specific routes
 export const config = {
   matcher: [
     "/dashboard/:path*",

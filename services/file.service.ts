@@ -7,23 +7,18 @@ const FILES_COLLECTION = "trip_files";
 const BUCKET_ID = "trip_bucket_id";
 
 export const fileService = {
-  /**
-   * Upload file to storage bucket and create metadata document.
-   */
   async uploadTripFile(
     tripId: string,
     file: File,
     userId: string
   ): Promise<TripFile> {
     try {
-      // 1. Upload to storage bucket
       const uploadedFile = await storage.createFile(
         BUCKET_ID,
         ID.unique(),
         file
       );
 
-      // 2. Create metadata doc
       const fileData = {
         tripId,
         fileId: uploadedFile.$id,
@@ -46,15 +41,10 @@ export const fileService = {
     }
   },
 
-  /**
-   * Delete file from bucket and metadata from database collection.
-   */
   async deleteTripFile(documentId: string, fileId: string): Promise<void> {
     try {
-      // 1. Delete File from Storage
       await storage.deleteFile(BUCKET_ID, fileId);
 
-      // 2. Delete metadata doc from the DB
       await databases.deleteDocument(DATABASE_ID, FILES_COLLECTION, documentId);
     } catch (error) {
       console.error("Error deleting trip file:", error);
@@ -62,9 +52,6 @@ export const fileService = {
     }
   },
 
-  /**
-   * Fetch all files for a trip.
-   */
   async getTripFiles(tripId: string): Promise<TripFile[]> {
     try {
       const resp = await databases.listDocuments<TripFile>(
@@ -83,23 +70,14 @@ export const fileService = {
     }
   },
 
-  /**
-   * Get File Preview URL for images.
-   */
   getFilePreview(fileId: string): string {
     return storage.getFilePreview(BUCKET_ID, fileId).toString();
   },
 
-  /**
-   * Get File View URL for PDFs and other files.
-   */
   getFileView(fileId: string): string {
     return storage.getFileView(BUCKET_ID, fileId).toString();
   },
 
-  /**
-   * Get File Download URL.
-   */
   getFileDownload(fileId: string): string {
     return storage.getFileDownload(BUCKET_ID, fileId).toString();
   },

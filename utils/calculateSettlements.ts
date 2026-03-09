@@ -9,20 +9,12 @@ interface Balance {
   balance: number;
 }
 
-/**
- * Calculate the minimum number of transactions to settle all balances.
- * Uses a greedy algorithm: match the largest creditor with the largest debtor.
- *
- * @param balances - Per-user balance from calculateSplit (positive = owed money, negative = owes money)
- * @returns Array of settlements: { fromUserId, toUserId, amount }
- */
+/** Greedy min-transactions settlement: match largest creditor with largest debtor. */
 export function calculateSettlements(balances: Balance[]): Settlement[] {
-  // Separate into creditors (positive balance) and debtors (negative balance)
   const creditors: { userId: string; amount: number }[] = [];
   const debtors: { userId: string; amount: number }[] = [];
 
   balances.forEach((b) => {
-    // Round to 2 decimals to avoid floating point artifacts
     const rounded = Math.round(b.balance * 100) / 100;
     if (rounded > 0) {
       creditors.push({ userId: b.userId, amount: rounded });
@@ -31,7 +23,6 @@ export function calculateSettlements(balances: Balance[]): Settlement[] {
     }
   });
 
-  // Sort both descending by amount for greedy matching
   creditors.sort((a, b) => b.amount - a.amount);
   debtors.sort((a, b) => b.amount - a.amount);
 

@@ -97,14 +97,10 @@ export function ChecklistTab({ tripId, isOwnerOrEditor, userId }: Props) {
   const handleToggleItem = async (itemId: string, completed: boolean) => {
     if (!userId) return;
 
-    // Note: Local optimistic state is tricky to fully represent here without QueryCache overrides,
-    // but the centralized useTripRealtime will pick up the Appwrite event anyway.
-
     try {
       await checklistService.toggleItemCompletion(itemId, userId, completed);
     } catch (error) {
       toast.error("Failed to update item");
-      // Revert omitted for brevity, react query invalidation will fix it
     }
   };
 
@@ -124,7 +120,6 @@ export function ChecklistTab({ tripId, isOwnerOrEditor, userId }: Props) {
     const listItems = itemsMap[checklistId] || [];
     const newItems = arrayMove(listItems, oldIndex, newIndex);
 
-    // Optimistic update omitted, we rely on the DB + React Query
     try {
       const updates = newItems.map((item, index) => ({
         id: item.$id,

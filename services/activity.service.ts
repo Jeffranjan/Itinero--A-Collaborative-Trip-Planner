@@ -6,9 +6,6 @@ const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const ACTIVITIES_COLLECTION = "activities";
 
 export const activityService = {
-  /**
-   * Creates a new activity
-   */
   async createActivity(
     data: CreateActivityInput,
     userId: string
@@ -20,9 +17,6 @@ export const activityService = {
         ID.unique(),
         data,
         [
-          // Typically we would dynamically assign based on member roles, but for now
-          // we add the creator specifically, or just rely on database level collection rules
-          // if we want all members to access it. We'll add the creator for safety.
           Permission.read(Role.user(userId)),
           Permission.update(Role.user(userId)),
           Permission.delete(Role.user(userId)),
@@ -34,9 +28,6 @@ export const activityService = {
     }
   },
 
-  /**
-   * Fetches activities for a specific day
-   */
   async getActivitiesByDay(dayId: string): Promise<TripActivity[]> {
     try {
       const activities = await databases.listDocuments<TripActivity>(
@@ -51,9 +42,6 @@ export const activityService = {
     }
   },
 
-  /**
-   * Update an existing activity
-   */
   async updateActivity(
     activityId: string,
     data: Partial<CreateActivityInput>
@@ -71,9 +59,6 @@ export const activityService = {
     }
   },
 
-  /**
-   * Delete an activity
-   */
   async deleteActivity(activityId: string): Promise<void> {
     try {
       await databases.deleteDocument(
@@ -87,14 +72,10 @@ export const activityService = {
     }
   },
 
-  /**
-   * Reorder activities mapping
-   */
   async reorderActivities(
     updates: { id: string; orderIndex: number }[]
   ): Promise<void> {
     try {
-      // Execute all updates concurrently
       await Promise.all(
         updates.map((update) =>
           databases.updateDocument(

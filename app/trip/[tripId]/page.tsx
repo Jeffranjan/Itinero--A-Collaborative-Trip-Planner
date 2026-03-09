@@ -72,10 +72,8 @@ function TripPageContent() {
   const tripId = params.tripId as string;
   const queryClient = useQueryClient();
 
-  // Initialize global realtime listener for this trip
   useTripRealtime(tripId);
 
-  // --- React Query Data Fetching ---
   const { data: trip, isLoading: isLoadingTrip } = useQuery({
     queryKey: ["trip", tripId],
     queryFn: () => tripService.getTrip(tripId),
@@ -107,19 +105,16 @@ function TripPageContent() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string>("viewer");
 
-  // Role Request State
   const [pendingRequests, setPendingRequests] = useState<RoleRequest[]>([]);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
 
-  // Presence State
   const [activeUsers, setActiveUsers] = useState<TripPresence[]>([]);
   const { setEditingStatus, setViewingStatus } = useTripPresence({
     tripId,
     user,
   });
 
-  // Modal State
   const [activeDayId, setActiveDayId] = useState<string | null>(null);
   const [activityToEdit, setActivityToEdit] = useState<TripActivity | null>(
     null
@@ -141,7 +136,6 @@ function TripPageContent() {
 
   const [activeTab, setActiveTab] = useState("Itinerary");
 
-  // DnD Sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -156,14 +150,13 @@ function TripPageContent() {
   const loadRoleAndPresenceData = useCallback(async () => {
     if (!user || !trip) return;
     try {
-      // Always call ensureMembership to create or backfill name/avatar
+      // Create or backfill membership
       const ensuredMember = await memberService.ensureMembership(
         tripId,
         user.$id,
         trip.createdBy === user.$id ? "owner" : "viewer"
       );
 
-      // Load current user role
       const members = await memberService.getTripMembers(tripId);
       let member =
         members.find((m) => m.userId === user.$id) || (ensuredMember as any);
@@ -180,13 +173,11 @@ function TripPageContent() {
         }
       }
 
-      // Load requests for owner
       if (trip.createdBy === user.$id) {
         const reqs = await roleRequestService.getPendingRequestsForTrip(tripId);
         setPendingRequests(reqs);
       }
 
-      // Load active presence
       const presence = await presenceService.getTripPresence(tripId);
       setActiveUsers(presence);
     } catch (error) {
@@ -194,14 +185,13 @@ function TripPageContent() {
     }
   }, [tripId, user, trip]);
 
-  // Keep supplementary local polling/loads (presence, roles) outside the main React Query data path for now
   useEffect(() => {
     if (user && trip) {
       loadRoleAndPresenceData();
     }
   }, [user, trip, loadRoleAndPresenceData]);
 
-  // Clean up stale presence (e.g. > 30s) locally
+  // Prune stale presences locally (>30s)
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
@@ -215,7 +205,7 @@ function TripPageContent() {
     return () => clearInterval(interval);
   }, []);
 
-  // Memoize channels to prevent WebSocket teardown on every render
+  // Stable channel array prevents WebSocket reconnections on re-render
   const realtimeChannels = useMemo(
     () => [
       `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.role_requests.documents`,
@@ -226,14 +216,12 @@ function TripPageContent() {
     []
   );
 
-  // Realtime Engine for Presence, Roles, and Trips (Activities and Days handled by useTripRealtime global hook)
   useRealtimeSubscription(
     realtimeChannels,
     useCallback(
       (event) => {
         const payload = event.payload as any;
 
-        // Guard scope to current trip
         if (payload.tripId && payload.tripId !== tripId) return;
 
         const isCreate = event.events.some((e: string) =>
@@ -246,7 +234,6 @@ function TripPageContent() {
           e.includes(".delete")
         );
 
-        // -- TRIPS REALTIME --
         if (
           event.events.some((e: string) => e.includes(".collections.trips."))
         ) {
@@ -256,13 +243,11 @@ function TripPageContent() {
           }
         }
 
-        // -- MEMBERS REALTIME --
         if (
           event.events.some((e: string) =>
             e.includes(".collections.trip_members.")
           )
         ) {
-          // If membership changes apply to active user
           if (user && payload.userId === user.$id) {
             if (isUpdate) {
               setCurrentUserRole(payload.role);
@@ -274,7 +259,6 @@ function TripPageContent() {
           }
         }
 
-        // -- ROLE REQUESTS REALTIME --
         if (
           event.events.some((e: string) =>
             e.includes(".collections.role_requests.")
@@ -282,7 +266,6 @@ function TripPageContent() {
         ) {
           const request = payload as RoleRequest;
           if (isCreate && request.status === "pending") {
-            // If the current user is the owner, fetch the pending requests to update the UI
             if (trip && user && trip.createdBy === user.$id) {
               roleRequestService
                 .getPendingRequestsForTrip(tripId)
@@ -290,7 +273,6 @@ function TripPageContent() {
               toast.info("New Editor Access Request received");
             }
           } else if (isUpdate || isDelete) {
-            // For the owner: remove request from panel if status is no longer pending
             if (trip && user && trip.createdBy === user.$id) {
               if (request.status !== "pending" || isDelete) {
                 setPendingRequests((prev) =>
@@ -298,7 +280,7 @@ function TripPageContent() {
                 );
               }
             }
-            // For the requester: clear the pending state if it was approved/rejected
+
             if (
               user &&
               request.userId === user.$id &&
@@ -548,16 +530,14 @@ function TripPageContent() {
     mutationFn: (updates: { id: string; orderIndex: number }[]) =>
       activityService.reorderActivities(updates),
     onMutate: async (updates) => {
-      // Cancel any outgoing refetches so they don't overwrite our optimistic update
+      // Prevent outgoing refetches from overwriting optimistic data
       await queryClient.cancelQueries({ queryKey: ["tripDays", tripId] });
 
-      // Snapshot the previous value
       const previousData = queryClient.getQueryData<{
         days: TripDay[];
         activitiesMap: Record<string, TripActivity[]>;
       }>(["tripDays", tripId]);
 
-      // Optimistically update to the new value
       if (previousData) {
         const newMap = { ...previousData.activitiesMap };
         // We know they belong to the same day from handleDragEnd

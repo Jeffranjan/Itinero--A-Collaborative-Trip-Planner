@@ -105,7 +105,6 @@ export function BudgetTab({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
 
-  // Delete mutation with optimistic UI and 404-safe error handling
   const deleteMutation = useMutation({
     mutationFn: (expenseId: string) => budgetService.deleteExpense(expenseId),
     onMutate: async (expenseId: string) => {
@@ -115,7 +114,6 @@ export function BudgetTab({
 
       const previousData = queryClient.getQueryData(["tripExpenses", trip.$id]);
 
-      // Optimistic removal
       queryClient.setQueryData(
         ["tripExpenses", trip.$id],
         (old: typeof expensesData) => {
@@ -134,13 +132,12 @@ export function BudgetTab({
       return { previousData };
     },
     onError: (error: any, _expenseId, context) => {
-      // If 404, the expense was already deleted (e.g., by a collaborator) — that's OK
+      // 404 = already deleted by a collaborator
       if (error?.code === 404 || error?.message?.includes("not be found")) {
         console.warn("Expense already removed by collaborator");
         return;
       }
 
-      // Rollback optimistic update on real errors
       if (context?.previousData) {
         queryClient.setQueryData(
           ["tripExpenses", trip.$id],
@@ -159,12 +156,10 @@ export function BudgetTab({
     deleteMutation.mutate(expenseId);
   };
 
-  // Called when CreateExpenseModal successfully creates or updates an expense
   const handleExpenseChange = () => {
     queryClient.invalidateQueries({ queryKey: ["tripExpenses", trip.$id] });
   };
 
-  // Use centralized split calculation helper
   const summary = useMemo(
     () => calculateSplit(expenses, splits, members, currentUserId),
     [expenses, splits, members, currentUserId]

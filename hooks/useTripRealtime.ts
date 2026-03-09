@@ -24,10 +24,9 @@ export function useTripRealtime(tripId: string) {
     (event: any) => {
       const payload = event.payload;
 
-      // Filter events to only this trip
       if (payload.tripId && payload.tripId !== tripId) return;
 
-      // Optional: filter out our own events if we have updatedBy tracking
+      // Skip own events
       if (user && payload.updatedBy === user.$id) return;
 
       const isCreate = event.events.some((e: string) => e.includes(".create"));
@@ -35,8 +34,6 @@ export function useTripRealtime(tripId: string) {
       const isDelete = event.events.some((e: string) => e.includes(".delete"));
 
       if (!isCreate && !isUpdate && !isDelete) return;
-
-      // Invalidate specific queries based on the collection that changed
 
       if (
         event.events.some(

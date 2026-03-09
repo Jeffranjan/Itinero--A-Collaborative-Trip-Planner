@@ -47,7 +47,7 @@ function DashboardContent() {
       const dataCounts = await Promise.all(
         userTrips.map(async (trip) => {
           const days = await tripService.getTripDays(trip.$id);
-          // Mocking members and activities counts for stats presentation
+          // TODO: fetch real counts
           return {
             tripId: trip.$id,
             daysCount: days.length,
@@ -84,7 +84,7 @@ function DashboardContent() {
         0
       );
     }
-    const expensesLogged = totalTrips * 12; // Mocked stat
+    const expensesLogged = totalTrips * 12; // placeholder
     return { totalTrips, collaborators, activitiesPlanned, expensesLogged };
   }, [trips, tripsData]);
 

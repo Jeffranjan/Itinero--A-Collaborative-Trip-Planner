@@ -57,7 +57,6 @@ export function CreateExpenseModal({
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
 
-  // Create mutation
   const createMutation = useMutation({
     mutationFn: (payload: { data: CreateExpensePayload; userId: string }) =>
       budgetService.createExpense(payload.data, payload.userId),
@@ -72,7 +71,6 @@ export function CreateExpenseModal({
     },
   });
 
-  // Update mutation
   const updateMutation = useMutation({
     mutationFn: (payload: {
       expenseId: string;
@@ -91,7 +89,6 @@ export function CreateExpenseModal({
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
-  // Initialize defaults when modal opens
   useEffect(() => {
     if (isOpen) {
       if (expenseToEdit) {
@@ -156,7 +153,6 @@ export function CreateExpenseModal({
     }
   };
 
-  // Lock body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";

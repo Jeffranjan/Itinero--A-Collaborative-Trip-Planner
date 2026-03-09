@@ -27,8 +27,7 @@ export function FilesTab({ tripId, userId, isOwnerOrEditor }: FilesTabProps) {
     queryFn: () => fileService.getTripFiles(tripId),
   });
 
-  // Re-use our centralized realtime approach. Wait, useTripRealtime doesn't specifically include trip_files yet,
-  // so we'll add a quick local subscription for it here to invalidate.
+  // Realtime: invalidate file queries on create/delete
   const realtimeChannels = useMemo(
     () => [
       `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_files.documents`,
@@ -41,7 +40,7 @@ export function FilesTab({ tripId, userId, isOwnerOrEditor }: FilesTabProps) {
     useCallback(
       (event: any) => {
         const payload = event.payload as TripFile;
-        // Only process events for this trip
+
         if (payload.tripId !== tripId) return;
 
         const isCreate = event.events.some((e: string) =>
@@ -66,7 +65,7 @@ export function FilesTab({ tripId, userId, isOwnerOrEditor }: FilesTabProps) {
       setIsUploading(true);
       try {
         for (const file of acceptedFiles) {
-          // Check file size (20MB)
+          // 20MB limit
           if (file.size > 20 * 1024 * 1024) {
             toast.error(`File ${file.name} is larger than 20MB.`);
             continue;
