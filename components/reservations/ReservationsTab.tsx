@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Plus, Loader2, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { AnimatePresence } from "framer-motion";
@@ -6,6 +6,7 @@ import { AnimatePresence } from "framer-motion";
 import { reservationService } from "@/services/reservation.service";
 import { memberService } from "@/services/member.service";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TripReservation } from "@/types/reservation";
 
 import { Button } from "@/components/ui/button";
@@ -23,49 +24,34 @@ export function ReservationsTab({
   isOwnerOrEditor,
   userId,
 }: ReservationsTabProps) {
-  const [reservations, setReservations] = useState<TripReservation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const { data: reservations = [], isLoading: isReservationsLoading } =
+    useQuery({
+      queryKey: ["tripReservations", tripId],
+      queryFn: () => reservationService.getTripReservations(tripId),
+    });
+
+  const { data: membersData, isLoading: isMembersLoading } = useQuery({
+    queryKey: ["tripMembers", tripId],
+    queryFn: async () => {
+      const members = await memberService.getTripMembers(tripId);
+      const editors = members
+        .filter((m) => m.role === "editor")
+        .map((m) => m.userId);
+      const viewers = members.map((m) => m.userId);
+      return { editors, viewers };
+    },
+  });
+
+  const tripEditors = membersData?.editors || [];
+  const tripMembers = membersData?.viewers || [];
+  const isLoading = isReservationsLoading || isMembersLoading;
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [reservationToEdit, setReservationToEdit] =
     useState<TripReservation | null>(null);
-
-  // Members tracking for permissions
-  const [tripEditors, setTripEditors] = useState<string[]>([]);
-  const [tripMembers, setTripMembers] = useState<string[]>([]);
-
-  const fetchReservations = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const data = await reservationService.getTripReservations(tripId);
-      setReservations(data);
-    } catch (error) {
-      console.error("Failed to load reservations", error);
-      toast.error("Could not load reservations");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [tripId]);
-
-  const fetchMembers = useCallback(async () => {
-    try {
-      const members = await memberService.getTripMembers(tripId);
-      const editors = members
-        .filter((m) => m.role === "editor")
-        .map((m) => m.userId);
-      const viewers = members.map((m) => m.userId); // all members are readers natively
-      setTripEditors(editors);
-      setTripMembers(viewers);
-    } catch (error) {
-      console.error("Failed to load members for permissions", error);
-    }
-  }, [tripId]);
-
-  useEffect(() => {
-    fetchReservations();
-    fetchMembers();
-  }, [fetchReservations, fetchMembers]);
 
   const handleDelete = (id: string) => {
     toast("Delete Reservation?", {
@@ -112,30 +98,13 @@ export function ReservationsTab({
           e.includes(".delete")
         );
 
-        if (isCreate) {
-          setReservations((prev) => {
-            if (prev.some((r) => r.$id === payload.$id)) return prev;
-            return [...prev, payload].sort(
-              (a, b) =>
-                new Date(a.startDate || a.createdAt).getTime() -
-                new Date(b.startDate || b.createdAt).getTime()
-            );
+        if (isCreate || isUpdate || isDelete) {
+          queryClient.invalidateQueries({
+            queryKey: ["tripReservations", tripId],
           });
-        } else if (isUpdate) {
-          setReservations((prev) =>
-            prev
-              .map((r) => (r.$id === payload.$id ? payload : r))
-              .sort(
-                (a, b) =>
-                  new Date(a.startDate || a.createdAt).getTime() -
-                  new Date(b.startDate || b.createdAt).getTime()
-              )
-          );
-        } else if (isDelete) {
-          setReservations((prev) => prev.filter((r) => r.$id !== payload.$id));
         }
       },
-      [tripId]
+      [tripId, queryClient]
     )
   );
 

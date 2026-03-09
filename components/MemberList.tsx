@@ -106,7 +106,8 @@ export function MemberList({ tripId, isOwner, activeUsers }: MemberListProps) {
           {sortedMembers.map((member) => (
             <div key={member.$id} className="relative z-10">
               <MemberAvatar
-                name={member.user?.name || "Unknown"}
+                name={member.name || member.user?.name || "Unknown"}
+                avatarInitial={member.avatarInitial}
                 role={member.role}
                 status={
                   activeUsers.find((u) => u.userId === member.userId)?.status ||

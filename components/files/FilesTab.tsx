@@ -5,7 +5,8 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { TripFile } from "@/types/file";
 import { fileService } from "@/services/file.service";
-import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTripRealtime } from "@/hooks/useTripRealtime";
 import { FileCard } from "./FileCard";
 import { FilePreviewModal } from "./FilePreviewModal";
 
@@ -16,30 +17,15 @@ interface FilesTabProps {
 }
 
 export function FilesTab({ tripId, userId, isOwnerOrEditor }: FilesTabProps) {
-  const [files, setFiles] = useState<TripFile[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
 
-  const [previewFile, setPreviewFile] = useState<TripFile | null>(null);
+  const { data: files = [], isLoading } = useQuery({
+    queryKey: ["tripFiles", tripId],
+    queryFn: () => fileService.getTripFiles(tripId),
+  });
 
-  const loadFiles = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const fetchedFiles = await fileService.getTripFiles(tripId);
-      setFiles(fetchedFiles);
-    } catch (error) {
-      console.error("Error loading files:", error);
-      toast.error("Failed to load files");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [tripId]);
-
-  useEffect(() => {
-    loadFiles();
-  }, [loadFiles]);
-
+  // Re-use our centralized realtime approach. Wait, useTripRealtime doesn't specifically include trip_files yet,
+  // so we'll add a quick local subscription for it here to invalidate.
   const realtimeChannels = useMemo(
     () => [
       `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_files.documents`,
@@ -62,16 +48,11 @@ export function FilesTab({ tripId, userId, isOwnerOrEditor }: FilesTabProps) {
           e.includes(".delete")
         );
 
-        if (isCreate) {
-          setFiles((prev) => {
-            if (prev.some((f) => f.$id === payload.$id)) return prev;
-            return [payload, ...prev];
-          });
-        } else if (isDelete) {
-          setFiles((prev) => prev.filter((f) => f.$id !== payload.$id));
+        if (isCreate || isDelete) {
+          queryClient.invalidateQueries({ queryKey: ["tripFiles", tripId] });
         }
       },
-      [tripId]
+      [tripId, queryClient]
     )
   );
 

@@ -15,6 +15,9 @@ export interface TripMember extends Models.Document {
   tripId: string;
   userId: string;
   role: "owner" | "editor" | "viewer";
+  name?: string;
+  avatarInitial?: string;
+  joinedAt?: string;
 }
 
 export interface TripDay extends Models.Document {

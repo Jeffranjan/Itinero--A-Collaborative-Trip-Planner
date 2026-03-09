@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Plus,
   Wallet,
@@ -19,10 +19,10 @@ import {
 } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
 import { budgetService } from "@/services/budget.service";
 import { memberService } from "@/services/member.service";
-import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
-import { Expense, ExpenseSplit } from "@/types/expense";
+import { ExpenseSplit } from "@/types/expense";
 import { Trip } from "@/types/trip";
 import { formatCurrency } from "@/lib/currency";
 
@@ -65,22 +65,18 @@ export function BudgetTab({
   currentUserId,
   isOwnerOrEditor,
 }: BudgetTabProps) {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [splits, setSplits] = useState<ExpenseSplit[]>([]);
-  const [members, setMembers] = useState<TripMemberInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { data: members = [], isLoading: isLoadingMembers } = useQuery({
+    queryKey: ["tripMembers", trip.$id],
+    queryFn: async () => {
+      const tripMembers = await memberService.getTripMembers(trip.$id);
+      return tripMembers as unknown as TripMemberInfo[];
+    },
+  });
 
-  const fetchData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const [tripExpenses, tripMembers] = await Promise.all([
-        budgetService.getTripExpenses(trip.$id),
-        memberService.getTripMembers(trip.$id),
-      ]);
-
+  const { data: expensesData, isLoading: isLoadingExpenses } = useQuery({
+    queryKey: ["tripExpenses", trip.$id],
+    queryFn: async () => {
+      const tripExpenses = await budgetService.getTripExpenses(trip.$id);
       const allSplits: ExpenseSplit[] = [];
       await Promise.all(
         tripExpenses.map(async (exp) => {
@@ -88,47 +84,24 @@ export function BudgetTab({
           allSplits.push(...expSplits);
         })
       );
+      return { expenses: tripExpenses, splits: allSplits };
+    },
+  });
 
-      setExpenses(tripExpenses);
-      setSplits(allSplits);
-      setMembers(tripMembers as unknown as TripMemberInfo[]);
-    } catch (error) {
-      console.error("Failed to load budget data:", error);
-      toast.error("Failed to load budget data");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [trip.$id]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // Realtime updates
-  useRealtimeSubscription(
-    [
-      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_expenses.documents`,
-      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.expense_splits.documents`,
-    ],
-    useCallback(
-      (event) => {
-        const payload = event.payload as any;
-        if (payload.tripId && payload.tripId !== trip.$id) return;
-
-        // Simplify realtime refresh by refetching everything to ensure splits and expenses stay in sync
-        // For production, more granular updates would be better
-        fetchData();
-      },
-      [trip.$id, fetchData]
-    )
+  const expenses = useMemo(
+    () => expensesData?.expenses || [],
+    [expensesData?.expenses]
   );
+  const splits = useMemo(
+    () => expensesData?.splits || [],
+    [expensesData?.splits]
+  );
+  const isLoading = isLoadingMembers || isLoadingExpenses;
 
   const handleDelete = async (expenseId: string) => {
     try {
       setDeletingId(expenseId);
       await budgetService.deleteExpense(expenseId);
-      setExpenses((prev) => prev.filter((e) => e.$id !== expenseId));
-      setSplits((prev) => prev.filter((s) => s.expenseId !== expenseId));
       toast.success("Expense deleted");
     } catch (error) {
       toast.error("Failed to delete expense");

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { format, addDays, isBefore } from "date-fns";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
@@ -42,7 +43,7 @@ import {
   roleRequestService,
   RoleRequest,
 } from "@/services/roleRequest.service";
-import { Trip, TripDay, TripActivity } from "@/types/trip";
+import { TripDay, TripActivity } from "@/types/trip";
 import { Nav } from "@/components/Nav";
 import { Button } from "@/components/ui/button";
 import { AddActivityModal } from "@/components/AddActivityModal";
@@ -61,6 +62,7 @@ import { FilesTab } from "@/components/files/FilesTab";
 import { ReservationsTab } from "@/components/reservations/ReservationsTab";
 import { BudgetTab } from "@/components/budget/BudgetTab";
 import { AuthGuard } from "@/components/auth/AuthGuard";
+import { useTripRealtime } from "@/hooks/useTripRealtime";
 
 function TripPageContent() {
   const params = useParams();
@@ -68,15 +70,39 @@ function TripPageContent() {
   const { user, isLoading: isAuthLoading } = useAuth();
 
   const tripId = params.tripId as string;
+  const queryClient = useQueryClient();
 
-  const [trip, setTrip] = useState<Trip | null>(null);
-  const [days, setDays] = useState<TripDay[]>([]);
-  // Use a map to store activities per day ID
-  const [activitiesMap, setActivitiesMap] = useState<
-    Record<string, TripActivity[]>
-  >({});
+  // Initialize global realtime listener for this trip
+  useTripRealtime(tripId);
 
-  const [isLoading, setIsLoading] = useState(true);
+  // --- React Query Data Fetching ---
+  const { data: trip, isLoading: isLoadingTrip } = useQuery({
+    queryKey: ["trip", tripId],
+    queryFn: () => tripService.getTrip(tripId),
+    enabled: !!user && !!tripId,
+  });
+
+  const { data: tripDaysData, isLoading: isLoadingDays } = useQuery({
+    queryKey: ["tripDays", tripId],
+    queryFn: async () => {
+      const fetchedDays = await tripService.getTripDays(tripId);
+      const activitiesMap: Record<string, TripActivity[]> = {};
+      await Promise.all(
+        fetchedDays.map(async (day) => {
+          const acts = await activityService.getActivitiesByDay(day.$id);
+          activitiesMap[day.$id] = acts;
+        })
+      );
+      return { days: fetchedDays, activitiesMap };
+    },
+    enabled: !!user && !!tripId,
+  });
+
+  const days = tripDaysData?.days || [];
+  const activitiesMap = tripDaysData?.activitiesMap || {};
+
+  const isLoading = isLoadingTrip || isLoadingDays || isAuthLoading;
+
   const [isAddingDay, setIsAddingDay] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string>("viewer");
@@ -127,66 +153,53 @@ function TripPageContent() {
     })
   );
 
-  const loadTripData = useCallback(async () => {
+  const loadRoleAndPresenceData = useCallback(async () => {
+    if (!user || !trip) return;
     try {
-      setIsLoading(true);
-      const fetchedTrip = await tripService.getTrip(tripId);
-      setTrip(fetchedTrip);
-
-      const fetchedDays = await tripService.getTripDays(tripId);
-      setDays(fetchedDays);
-
-      // Load activities for each day
-      const activitiesData: Record<string, TripActivity[]> = {};
-      await Promise.all(
-        fetchedDays.map(async (day) => {
-          const acts = await activityService.getActivitiesByDay(day.$id);
-          activitiesData[day.$id] = acts;
-        })
-      );
-      setActivitiesMap(activitiesData);
-
       // Load current user role
-      if (user) {
-        const members = await memberService.getTripMembers(tripId);
-        const member = members.find((m) => m.userId === user.$id);
-        if (member) {
-          setCurrentUserRole(member.role);
+      const members = await memberService.getTripMembers(tripId);
+      let member = members.find((m) => m.userId === user.$id);
 
-          if (member.role === "viewer") {
-            const hasReq = await roleRequestService.checkPendingRequestExists(
-              tripId,
-              user.$id
-            );
-            setHasPendingRequest(hasReq);
-          }
-        }
-
-        // Load requests for owner
-        if (fetchedTrip.createdBy === user.$id) {
-          const reqs =
-            await roleRequestService.getPendingRequestsForTrip(tripId);
-          setPendingRequests(reqs);
-        }
-
-        // Load active presence
-        const presence = await presenceService.getTripPresence(tripId);
-        setActiveUsers(presence);
+      if (!member) {
+        member = (await memberService.ensureMembership(
+          tripId,
+          user.$id,
+          "viewer"
+        )) as any;
       }
-    } catch (error) {
-      console.error("Error loading trip data:", error);
-      toast.error("Failed to load trip details");
-      router.push("/dashboard");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [tripId, router, user]);
 
-  useEffect(() => {
-    if (user && tripId) {
-      loadTripData();
+      if (member) {
+        setCurrentUserRole(member.role);
+
+        if (member.role === "viewer") {
+          const hasReq = await roleRequestService.checkPendingRequestExists(
+            tripId,
+            user.$id
+          );
+          setHasPendingRequest(hasReq);
+        }
+      }
+
+      // Load requests for owner
+      if (trip.createdBy === user.$id) {
+        const reqs = await roleRequestService.getPendingRequestsForTrip(tripId);
+        setPendingRequests(reqs);
+      }
+
+      // Load active presence
+      const presence = await presenceService.getTripPresence(tripId);
+      setActiveUsers(presence);
+    } catch (error) {
+      console.error("Error loading supplementary trip data:", error);
     }
-  }, [user, tripId, loadTripData]);
+  }, [tripId, user, trip]);
+
+  // Keep supplementary local polling/loads (presence, roles) outside the main React Query data path for now
+  useEffect(() => {
+    if (user && trip) {
+      loadRoleAndPresenceData();
+    }
+  }, [user, trip, loadRoleAndPresenceData]);
 
   // Clean up stale presence (e.g. > 30s) locally
   useEffect(() => {
@@ -205,17 +218,15 @@ function TripPageContent() {
   // Memoize channels to prevent WebSocket teardown on every render
   const realtimeChannels = useMemo(
     () => [
-      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.activities.documents`,
-      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_days.documents`,
-      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_members.documents`,
       `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.role_requests.documents`,
       `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_presence.documents`,
       `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trips.documents`,
+      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_members.documents`,
     ],
     []
   );
 
-  // Realtime Engine
+  // Realtime Engine for Presence, Roles, and Trips (Activities and Days handled by useTripRealtime global hook)
   useRealtimeSubscription(
     realtimeChannels,
     useCallback(
@@ -235,95 +246,12 @@ function TripPageContent() {
           e.includes(".delete")
         );
 
-        // -- ACTIVITIES REALTIME --
-        if (
-          event.events.some((e: string) =>
-            e.includes(".collections.activities.")
-          )
-        ) {
-          const activity = payload as TripActivity;
-          if (isCreate) {
-            setActivitiesMap((prev) => {
-              const dayActs = prev[activity.dayId] || [];
-              if (dayActs.some((a) => a.$id === activity.$id)) return prev;
-              toast("Trip updated by another collaborator");
-              return { ...prev, [activity.dayId]: [...dayActs, activity] };
-            });
-          } else if (isUpdate) {
-            setActivitiesMap((prev) => {
-              const newMap = { ...prev };
-
-              // 1. Remove the activity from wherever it was before (search all days)
-              let foundOldDayId: string | null = null;
-              Object.keys(newMap).forEach((dayId) => {
-                const acts = newMap[dayId] || [];
-                const exists = acts.some((a) => a.$id === activity.$id);
-                if (exists) {
-                  foundOldDayId = dayId;
-                  newMap[dayId] = acts.filter((a) => a.$id !== activity.$id);
-                }
-              });
-
-              // If we didn't track it before and it's not for our active trip, we can ignore (though we guarded tripId above)
-              if (!foundOldDayId) {
-                // It might be a new incoming activity that we missed via Create,
-                // but usually we should track it anyway. Let's just allow it into the new day.
-              }
-
-              // 2. Insert the updated activity into its CURRENT dayId
-              const targetDayActs = newMap[activity.dayId] || [];
-              newMap[activity.dayId] = [...targetDayActs, activity].sort(
-                (a, b) => a.orderIndex - b.orderIndex
-              );
-
-              return newMap;
-            });
-          } else if (isDelete) {
-            setActivitiesMap((prev) => {
-              const dayActs = prev[activity.dayId] || [];
-              if (!dayActs.some((a) => a.$id === activity.$id)) return prev;
-              toast("An activity was removed by a collaborator");
-              return {
-                ...prev,
-                [activity.dayId]: dayActs.filter((a) => a.$id !== activity.$id),
-              };
-            });
-          }
-        }
-
-        // -- DAYS REALTIME --
-        if (
-          event.events.some((e: string) =>
-            e.includes(".collections.trip_days.")
-          )
-        ) {
-          const day = payload as TripDay;
-          if (isCreate) {
-            setDays((prev) => {
-              if (prev.some((d) => d.$id === day.$id)) return prev;
-              toast("A new day was added by a collaborator");
-              return [...prev, day].sort((a, b) => a.orderIndex - b.orderIndex);
-            });
-          } else if (isUpdate) {
-            setDays((prev) => prev.map((d) => (d.$id === day.$id ? day : d)));
-          } else if (isDelete) {
-            setDays((prev) => prev.filter((d) => d.$id !== day.$id));
-            setActivitiesMap((prev) => {
-              const newMap = { ...prev };
-              delete newMap[day.$id];
-              return newMap;
-            });
-            toast("A trip day was removed");
-          }
-        }
-
         // -- TRIPS REALTIME --
         if (
           event.events.some((e: string) => e.includes(".collections.trips."))
         ) {
-          const tripPayload = payload as Trip;
           if (isUpdate) {
-            setTrip(tripPayload);
+            queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
             toast("Trip details were updated");
           }
         }
@@ -381,7 +309,7 @@ function TripPageContent() {
           }
         }
       },
-      [tripId, user, router, trip]
+      [tripId, user, router, trip, queryClient]
     )
   );
 
@@ -404,13 +332,8 @@ function TripPageContent() {
 
       const dateString = newDate.toISOString().split("T")[0];
 
-      const newDay = await tripService.addTripDay(
-        tripId,
-        dateString,
-        orderIndex
-      );
-      setDays([...days, newDay]);
-      setActivitiesMap((prev) => ({ ...prev, [newDay.$id]: [] }));
+      await tripService.addTripDay(tripId, dateString, orderIndex);
+      queryClient.invalidateQueries({ queryKey: ["tripDays", tripId] });
       toast.success("Day added successfully");
     } catch (error) {
       console.error("Error adding day:", error);
@@ -427,9 +350,7 @@ function TripPageContent() {
         coverImageId: fileId,
         coverImage: "",
       });
-      setTrip((prev) =>
-        prev ? { ...prev, coverImageId: fileId, coverImage: "" } : null
-      );
+      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
       toast.success("Cover image updated!");
     } catch (error) {
       toast.error("Failed to update cover image");
@@ -443,9 +364,7 @@ function TripPageContent() {
         coverImage: url,
         coverImageId: "",
       });
-      setTrip((prev) =>
-        prev ? { ...prev, coverImage: url, coverImageId: "" } : null
-      );
+      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
       toast.success("Cover image updated!");
     } catch (error) {
       toast.error("Failed to update cover image");
@@ -459,13 +378,7 @@ function TripPageContent() {
         coverImageId: fileId,
         coverImage: "",
       } as any);
-      setDays((prev) =>
-        prev.map((d) =>
-          d.$id === activeDayImageUpload
-            ? { ...d, coverImageId: fileId, coverImage: "" }
-            : d
-        )
-      );
+      queryClient.invalidateQueries({ queryKey: ["tripDays", tripId] });
       toast.success("Day cover updated!");
     } catch (error) {
       toast.error("Failed to update day cover");
@@ -481,13 +394,7 @@ function TripPageContent() {
         coverImage: url,
         coverImageId: "",
       } as any);
-      setDays((prev) =>
-        prev.map((d) =>
-          d.$id === activeDayImageUpload
-            ? { ...d, coverImage: url, coverImageId: "" }
-            : d
-        )
-      );
+      queryClient.invalidateQueries({ queryKey: ["tripDays", tripId] });
       toast.success("Day cover updated!");
     } catch (error) {
       toast.error("Failed to update day cover");
@@ -516,13 +423,7 @@ function TripPageContent() {
         imageIds: newImageIds,
       } as any);
 
-      const updatedActivity = { ...targetActivity, imageIds: newImageIds };
-      setActivitiesMap((prev) => ({
-        ...prev,
-        [targetDayId as string]: (prev[targetDayId as string] || []).map((a) =>
-          a.$id === activeActivityImageUpload ? updatedActivity : a
-        ),
-      }));
+      queryClient.invalidateQueries({ queryKey: ["tripDays", tripId] });
       toast.success("Image added to activity!");
     } catch (error) {
       toast.error("Failed to add image to activity");
@@ -551,13 +452,7 @@ function TripPageContent() {
         imageUrls: newImageUrls,
       } as any);
 
-      const updatedActivity = { ...targetActivity, imageUrls: newImageUrls };
-      setActivitiesMap((prev) => ({
-        ...prev,
-        [targetDayId as string]: (prev[targetDayId as string] || []).map((a) =>
-          a.$id === activeActivityImageUpload ? updatedActivity : a
-        ),
-      }));
+      queryClient.invalidateQueries({ queryKey: ["tripDays", tripId] });
       toast.success("Image added to activity!");
     } catch (error) {
       toast.error("Failed to add image to activity");
@@ -646,23 +541,64 @@ function TripPageContent() {
   };
 
   const handleActivityAdded = (dayId: string, activity: TripActivity) => {
-    setActivitiesMap((prev) => {
-      const dayActs = prev[dayId] || [];
-      const exists = dayActs.some((a) => a.$id === activity.$id);
-      if (exists) {
-        return {
-          ...prev,
-          [dayId]: dayActs.map((a) => (a.$id === activity.$id ? activity : a)),
-        };
-      }
-      return {
-        ...prev,
-        [dayId]: [...dayActs, activity],
-      };
-    });
+    queryClient.invalidateQueries({ queryKey: ["tripDays", tripId] });
   };
 
-  const handleDragEnd = async (event: DragEndEvent, dayId: string) => {
+  const { mutate: reorderActivities } = useMutation({
+    mutationFn: (updates: { id: string; orderIndex: number }[]) =>
+      activityService.reorderActivities(updates),
+    onMutate: async (updates) => {
+      // Cancel any outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: ["tripDays", tripId] });
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData<{
+        days: TripDay[];
+        activitiesMap: Record<string, TripActivity[]>;
+      }>(["tripDays", tripId]);
+
+      // Optimistically update to the new value
+      if (previousData) {
+        const newMap = { ...previousData.activitiesMap };
+        // We know they belong to the same day from handleDragEnd
+        const dayId =
+          updates.length > 0
+            ? previousData.days.find((d) =>
+                newMap[d.$id]?.some((a) => a.$id === updates[0].id)
+              )?.$id
+            : null;
+
+        if (dayId && newMap[dayId]) {
+          const actsCopy = [...newMap[dayId]];
+          updates.forEach((u) => {
+            const idx = actsCopy.findIndex((a) => a.$id === u.id);
+            if (idx !== -1)
+              actsCopy[idx] = { ...actsCopy[idx], orderIndex: u.orderIndex };
+          });
+          actsCopy.sort((a, b) => a.orderIndex - b.orderIndex);
+          newMap[dayId] = actsCopy;
+
+          queryClient.setQueryData(["tripDays", tripId], {
+            ...previousData,
+            activitiesMap: newMap,
+          });
+        }
+      }
+
+      return { previousData };
+    },
+    onError: (err, newTodo, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["tripDays", tripId], context.previousData);
+      }
+      toast.error("Failed to save new order");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["tripDays", tripId] });
+    },
+  });
+
+  const handleDragEnd = (event: DragEndEvent, dayId: string) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
@@ -670,7 +606,6 @@ function TripPageContent() {
       const oldIndex = activities.findIndex((a) => a.$id === active.id);
       const newIndex = activities.findIndex((a) => a.$id === over.id);
 
-      // Map to update format and sync with DB
       const newActivities = arrayMove(activities, oldIndex, newIndex);
 
       const updates = newActivities.map((act, index) => ({
@@ -678,23 +613,7 @@ function TripPageContent() {
         orderIndex: index,
       }));
 
-      // Update local state immediately (Optimistic Update)
-      setActivitiesMap((prev) => ({
-        ...prev,
-        [dayId]: newActivities.map((act, index) => ({
-          ...act,
-          orderIndex: index,
-        })),
-      }));
-
-      try {
-        await activityService.reorderActivities(updates);
-      } catch (error) {
-        console.error("Failed to persist reorder to DB", error);
-        toast.error("Failed to save new order");
-        // Revert on failure
-        setActivitiesMap((prev) => ({ ...prev, [dayId]: activities }));
-      }
+      reorderActivities(updates);
     }
   };
 
@@ -1329,7 +1248,9 @@ function TripPageContent() {
           isOpen={true}
           onClose={() => setIsEditingTrip(false)}
           trip={trip}
-          onUpdate={(t) => setTrip(t)}
+          onUpdate={(t) => {
+            queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+          }}
         />
       )}
 
@@ -1340,7 +1261,7 @@ function TripPageContent() {
           onClose={() => setDayToRename(null)}
           day={dayToRename}
           onUpdate={(d) => {
-            setDays((prev) => prev.map((old) => (old.$id === d.$id ? d : old)));
+            queryClient.invalidateQueries({ queryKey: ["tripDays", tripId] });
           }}
         />
       )}

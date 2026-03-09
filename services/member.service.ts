@@ -1,5 +1,5 @@
 import { ID, Query, Permission, Role } from "appwrite";
-import { databases } from "@/lib/appwrite";
+import { databases, account } from "@/lib/appwrite";
 import { TripMember } from "@/types/trip";
 
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
@@ -27,7 +27,28 @@ export const memberService = {
         throw new Error("You are already a member of this trip.");
       }
 
-      // 2. Create trip_member document defaulting to provided role
+      // 2. Fetch user identity to populate name and avatar
+      let name = "Unknown";
+      let avatarInitial = "?";
+      try {
+        const userAccount = await account.get();
+        if (userAccount.name) {
+          name = userAccount.name;
+          avatarInitial = name
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2);
+        } else {
+          name = userAccount.email.split("@")[0] || "Unknown";
+          avatarInitial = name.slice(0, 2).toUpperCase();
+        }
+      } catch (e) {
+        console.error("Could not fetch account details for joinTrip:", e);
+      }
+
+      // 3. Create trip_member document defaulting to provided role
       const newMember = await databases.createDocument<TripMember>(
         DATABASE_ID,
         TRIP_MEMBERS_COLLECTION,
@@ -36,6 +57,9 @@ export const memberService = {
           tripId,
           userId,
           role,
+          name,
+          avatarInitial,
+          joinedAt: new Date().toISOString(),
         },
         [
           Permission.read(Role.any()),
@@ -47,6 +71,75 @@ export const memberService = {
       return newMember;
     } catch (error) {
       console.error("Error joining trip:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Ensure user is a member of the trip, creating if not exists.
+   */
+  async ensureMembership(
+    tripId: string,
+    userId: string,
+    role: "owner" | "editor" | "viewer" = "viewer"
+  ): Promise<TripMember> {
+    try {
+      // 1. Check if already a member
+      const existingMembers = await databases.listDocuments<TripMember>(
+        DATABASE_ID,
+        TRIP_MEMBERS_COLLECTION,
+        [Query.equal("tripId", tripId), Query.equal("userId", userId)]
+      );
+
+      if (existingMembers.documents.length > 0) {
+        return existingMembers.documents[0];
+      }
+
+      // 2. Fetch user identity to populate name and avatar
+      let name = "Unknown";
+      let avatarInitial = "??";
+
+      try {
+        const userAccount = await account.get();
+        if (userAccount.name) {
+          name = userAccount.name;
+          avatarInitial = name
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2);
+        } else {
+          name = userAccount.email.split("@")[0] || "Unknown";
+          avatarInitial = name.slice(0, 2).toUpperCase();
+        }
+      } catch (e) {
+        console.error("Could not fetch account details for membership:", e);
+      }
+
+      // 3. Create trip_member document
+      const newMember = await databases.createDocument<TripMember>(
+        DATABASE_ID,
+        TRIP_MEMBERS_COLLECTION,
+        ID.unique(),
+        {
+          tripId,
+          userId,
+          role,
+          name,
+          avatarInitial,
+          joinedAt: new Date().toISOString(),
+        },
+        [
+          Permission.read(Role.any()),
+          Permission.update(Role.user(userId)),
+          Permission.delete(Role.user(userId)),
+        ]
+      );
+
+      return newMember;
+    } catch (error) {
+      console.error("Error creating/ensuring membership:", error);
       throw error;
     }
   },

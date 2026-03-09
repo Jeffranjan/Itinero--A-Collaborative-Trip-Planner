@@ -6,20 +6,24 @@ interface MemberAvatarProps {
   name: string;
   role: "owner" | "editor" | "viewer";
   status?: "viewing" | "editing" | "offline";
+  avatarInitial?: string;
 }
 
 export function MemberAvatar({
   name,
   role,
   status = "offline",
+  avatarInitial,
 }: MemberAvatarProps) {
   // Extract initials
-  const initials = name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const initials =
+    avatarInitial ||
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
 
   // Define border color based on role
   const ringColor =
