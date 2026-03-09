@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useDropzone } from "react-dropzone";
 import { CloudUpload, File as FileIcon } from "lucide-react";
 import { motion } from "framer-motion";
@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { TripFile } from "@/types/file";
 import { fileService } from "@/services/file.service";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTripRealtime } from "@/hooks/useTripRealtime";
+import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { FileCard } from "./FileCard";
 import { FilePreviewModal } from "./FilePreviewModal";
 
@@ -18,6 +18,9 @@ interface FilesTabProps {
 
 export function FilesTab({ tripId, userId, isOwnerOrEditor }: FilesTabProps) {
   const queryClient = useQueryClient();
+  const [isUploading, setIsUploading] = useState(false);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [previewFile, setPreviewFile] = useState<TripFile | null>(null);
 
   const { data: files = [], isLoading } = useQuery({
     queryKey: ["tripFiles", tripId],
