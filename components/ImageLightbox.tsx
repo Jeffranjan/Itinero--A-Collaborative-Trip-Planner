@@ -62,11 +62,15 @@ export function ImageLightbox({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl"
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-xl"
+        onClick={onClose}
       >
         <button
-          onClick={onClose}
-          className="absolute right-6 top-6 z-50 rounded-full p-3 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          className="absolute right-6 top-6 z-[110] rounded-full bg-white/10 p-3 text-white transition-colors hover:bg-white/20"
         >
           <X className="h-6 w-6" />
         </button>
@@ -74,21 +78,30 @@ export function ImageLightbox({
         {images.length > 1 && (
           <>
             <button
-              onClick={handlePrev}
-              className="absolute left-6 top-1/2 z-50 -translate-y-1/2 rounded-full p-4 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePrev();
+              }}
+              className="absolute left-6 top-1/2 z-[110] -translate-y-1/2 rounded-full bg-white/10 p-4 text-white transition-colors hover:bg-white/20"
             >
               <ChevronLeft className="h-8 w-8" />
             </button>
             <button
-              onClick={handleNext}
-              className="absolute right-6 top-1/2 z-50 -translate-y-1/2 rounded-full p-4 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNext();
+              }}
+              className="absolute right-6 top-1/2 z-[110] -translate-y-1/2 rounded-full bg-white/10 p-4 text-white transition-colors hover:bg-white/20"
             >
               <ChevronRight className="h-8 w-8" />
             </button>
           </>
         )}
 
-        <div className="relative flex h-full w-full items-center justify-center p-4 sm:p-12">
+        <div
+          className="relative flex h-full w-full items-center justify-center p-4 sm:p-12"
+          onClick={(e) => e.stopPropagation()}
+        >
           <motion.img
             key={currentIndex}
             src={images[currentIndex]}

@@ -1099,6 +1099,57 @@ function TripPageContent() {
                                       onImageClick={(images, index) =>
                                         setLightboxData({ images, index })
                                       }
+                                      onDeleteImage={async (imageIndex) => {
+                                        const imageIdsArr =
+                                          activity.imageIds || [];
+                                        const imageUrlsArr =
+                                          activity.imageUrls || [];
+
+                                        if (imageIndex < imageIdsArr.length) {
+                                          const fileId =
+                                            imageIdsArr[imageIndex];
+                                          const newIds = imageIdsArr.filter(
+                                            (_, i) => i !== imageIndex
+                                          );
+                                          try {
+                                            await mediaService.deleteImage(
+                                              fileId
+                                            );
+                                            await activityService.updateActivity(
+                                              activity.$id,
+                                              { imageIds: newIds } as any
+                                            );
+                                            queryClient.invalidateQueries({
+                                              queryKey: ["tripDays", tripId],
+                                            });
+                                            toast.success("Image removed");
+                                          } catch {
+                                            toast.error(
+                                              "Failed to delete image"
+                                            );
+                                          }
+                                        } else {
+                                          const urlIndex =
+                                            imageIndex - imageIdsArr.length;
+                                          const newUrls = imageUrlsArr.filter(
+                                            (_, i) => i !== urlIndex
+                                          );
+                                          try {
+                                            await activityService.updateActivity(
+                                              activity.$id,
+                                              { imageUrls: newUrls } as any
+                                            );
+                                            queryClient.invalidateQueries({
+                                              queryKey: ["tripDays", tripId],
+                                            });
+                                            toast.success("Image removed");
+                                          } catch {
+                                            toast.error(
+                                              "Failed to delete image"
+                                            );
+                                          }
+                                        }
+                                      }}
                                       onEdit={() => {
                                         setActivityToEdit(activity);
                                         setActiveDayId(day.$id);

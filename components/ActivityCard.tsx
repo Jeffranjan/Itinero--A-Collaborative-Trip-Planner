@@ -12,6 +12,7 @@ import {
   Edit2,
   Trash2,
   ImageIcon,
+  X,
 } from "lucide-react";
 import { mediaService } from "@/services/media.service";
 
@@ -24,6 +25,7 @@ interface ActivityCardProps {
   onDelete?: () => void;
   onAddImage?: () => void;
   onImageClick?: (images: string[], index: number) => void;
+  onDeleteImage?: (imageIndex: number) => void;
 }
 
 export function ActivityCard({
@@ -33,6 +35,7 @@ export function ActivityCard({
   onDelete,
   onAddImage,
   onImageClick,
+  onDeleteImage,
 }: ActivityCardProps) {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -193,7 +196,7 @@ export function ActivityCard({
                   e.preventDefault();
                   onImageClick?.(images, i);
                 }}
-                className="relative aspect-square cursor-pointer overflow-hidden rounded-lg border border-white/10 bg-black/20 transition-opacity hover:opacity-80"
+                className="group/img relative aspect-square cursor-pointer overflow-hidden rounded-lg border border-white/10 bg-black/20 transition-opacity hover:opacity-90"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -201,6 +204,19 @@ export function ActivityCard({
                   alt={`Activity Image ${i + 1}`}
                   className="h-full w-full object-cover"
                 />
+                {isOwnerOrEditor && onDeleteImage && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      onDeleteImage(i);
+                    }}
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600/80 text-white opacity-0 transition-opacity hover:bg-red-500 group-hover/img:opacity-100"
+                    aria-label="Delete image"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </motion.div>
             ))}
           </motion.div>
