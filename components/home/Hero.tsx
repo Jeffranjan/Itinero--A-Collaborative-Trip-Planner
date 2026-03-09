@@ -65,7 +65,7 @@ export function Hero() {
   };
 
   return (
-    <section className="relative flex min-h-[90vh] w-full items-center justify-center overflow-hidden pt-20">
+    <section className="relative flex min-h-screen w-full items-center justify-center overflow-hidden pt-20">
       {/* GSAP animated background glow */}
       <div
         ref={glowRef}
