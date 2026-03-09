@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState } from "react";
 import { Plus, ListTodo } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { checklistService } from "@/services/checklist.service";
-import { TripChecklist, ChecklistItem as ItemType } from "@/types/checklist";
+import { ChecklistItem as ItemType } from "@/types/checklist";
 import { ChecklistList } from "./ChecklistList";
 import { useQuery } from "@tanstack/react-query";
 import { arrayMove } from "@dnd-kit/sortable";
@@ -15,6 +15,8 @@ interface Props {
 }
 
 export function ChecklistTab({ tripId, isOwnerOrEditor, userId }: Props) {
+  const [newListTitle, setNewListTitle] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
   const { data: checklistData, isLoading: isLoadingChecklists } = useQuery({
     queryKey: ["tripChecklists", tripId],
     queryFn: async () => {
