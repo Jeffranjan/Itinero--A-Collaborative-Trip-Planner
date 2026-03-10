@@ -1,11 +1,34 @@
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useAuth } from "@/hooks/useAuth";
+import { Expense, ExpenseSplit } from "@/types/expense";
+
+/**
+ * Debounce helper — batches rapid calls into a single execution after `delay` ms.
+ */
+function createDebounce(delay: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return (fn: () => void) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(fn, delay);
+  };
+}
 
 export function useTripRealtime(tripId: string) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+
+  // Debounce for non-expense events to batch rapid updates
+  const debouncedInvalidation = useMemo(() => createDebounce(50), []);
+
+  // Cleanup debounce timer on unmount
+  const debounceCleanupRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (debounceCleanupRef.current) clearTimeout(debounceCleanupRef.current);
+    };
+  }, []);
 
   const channels = useMemo(
     () => [
@@ -26,7 +49,7 @@ export function useTripRealtime(tripId: string) {
 
       if (payload.tripId && payload.tripId !== tripId) return;
 
-      // Skip own events
+      // Skip our own events — optimistic updates already applied
       if (user && payload.updatedBy === user.$id) return;
 
       const isCreate = event.events.some((e: string) => e.includes(".create"));
@@ -35,21 +58,109 @@ export function useTripRealtime(tripId: string) {
 
       if (!isCreate && !isUpdate && !isDelete) return;
 
+      // --- Expense events: patch cache directly ---
+      const isExpenseEvent = event.events.some((e: string) =>
+        e.includes("trip_expenses.")
+      );
+      const isSplitEvent = event.events.some((e: string) =>
+        e.includes("expense_splits.")
+      );
+
+      if (isExpenseEvent) {
+        queryClient.setQueryData(
+          ["tripExpenses", tripId],
+          (
+            old: { expenses: Expense[]; splits: ExpenseSplit[] } | undefined
+          ) => {
+            if (!old) return old;
+
+            if (isCreate) {
+              // Avoid duplicates — match by ID or by content if optimistic (temp-) item exists
+              const exists = old.expenses.some(
+                (exp) =>
+                  exp.$id === payload.$id ||
+                  (exp.$id.startsWith("temp-") &&
+                    exp.title === payload.title &&
+                    exp.amount === payload.amount &&
+                    exp.paidBy === payload.paidBy)
+              );
+              if (exists) return old;
+              return {
+                expenses: [payload as Expense, ...old.expenses],
+                splits: old.splits,
+              };
+            }
+
+            if (isDelete) {
+              return {
+                expenses: old.expenses.filter((exp) => exp.$id !== payload.$id),
+                splits: old.splits.filter((s) => s.expenseId !== payload.$id),
+              };
+            }
+
+            if (isUpdate) {
+              return {
+                expenses: old.expenses.map((exp) =>
+                  exp.$id === payload.$id ? { ...exp, ...payload } : exp
+                ),
+                splits: old.splits,
+              };
+            }
+
+            return old;
+          }
+        );
+        return;
+      }
+
+      if (isSplitEvent) {
+        queryClient.setQueryData(
+          ["tripExpenses", tripId],
+          (
+            old: { expenses: Expense[]; splits: ExpenseSplit[] } | undefined
+          ) => {
+            if (!old) return old;
+
+            if (isCreate) {
+              const exists = old.splits.some((s) => s.$id === payload.$id);
+              if (exists) return old;
+              return {
+                expenses: old.expenses,
+                splits: [...old.splits, payload as ExpenseSplit],
+              };
+            }
+
+            if (isDelete) {
+              return {
+                expenses: old.expenses,
+                splits: old.splits.filter((s) => s.$id !== payload.$id),
+              };
+            }
+
+            if (isUpdate) {
+              return {
+                expenses: old.expenses,
+                splits: old.splits.map((s) =>
+                  s.$id === payload.$id ? { ...s, ...payload } : s
+                ),
+              };
+            }
+
+            return old;
+          }
+        );
+        return;
+      }
+
+      // --- Non-expense events: debounced invalidation ---
       if (
         event.events.some(
           (e: string) => e.includes("activities.") || e.includes("trip_days.")
         )
       ) {
-        queryClient.invalidateQueries({ queryKey: ["tripDays", tripId] });
-      }
-
-      if (
-        event.events.some(
-          (e: string) =>
-            e.includes("trip_expenses.") || e.includes("expense_splits.")
-        )
-      ) {
-        queryClient.invalidateQueries({ queryKey: ["tripExpenses", tripId] });
+        debouncedInvalidation(() =>
+          queryClient.invalidateQueries({ queryKey: ["tripDays", tripId] })
+        );
       }
 
       if (
@@ -58,14 +169,22 @@ export function useTripRealtime(tripId: string) {
             e.includes("trip_checklists.") || e.includes("checklist_items.")
         )
       ) {
-        queryClient.invalidateQueries({ queryKey: ["tripChecklists", tripId] });
+        debouncedInvalidation(() =>
+          queryClient.invalidateQueries({
+            queryKey: ["tripChecklists", tripId],
+          })
+        );
       }
 
       if (event.events.some((e: string) => e.includes("trip_members."))) {
-        queryClient.invalidateQueries({ queryKey: ["tripMembers", tripId] });
+        debouncedInvalidation(() =>
+          queryClient.invalidateQueries({
+            queryKey: ["tripMembers", tripId],
+          })
+        );
       }
     },
-    [tripId, queryClient, user]
+    [tripId, queryClient, user, debouncedInvalidation]
   );
 
   useRealtimeSubscription(channels, handleRealtimeEvent);

@@ -22,6 +22,22 @@ export function calculateSplit(
   members: MemberInfo[],
   currentUserId: string
 ): SplitResult & { totalPaid: number; totalOwed: number; userBalance: number } {
+  const safeExpenses = Array.isArray(expenses) ? expenses : [];
+  const safeSplits = Array.isArray(splits) ? splits : [];
+  const safeMembers = Array.isArray(members) ? members : [];
+
+  // Return safe defaults when data hasn't loaded yet
+  if (safeExpenses.length === 0 && safeMembers.length === 0) {
+    return {
+      total: 0,
+      totalPaid: 0,
+      totalOwed: 0,
+      userBalance: 0,
+      balances: [],
+      categoryTotals: {},
+    };
+  }
+
   let total = 0;
   let totalPaid = 0;
   let totalOwed = 0;
@@ -29,12 +45,12 @@ export function calculateSplit(
   const paidMap: Record<string, number> = {};
   const shareMap: Record<string, number> = {};
 
-  members.forEach((m) => {
+  safeMembers.forEach((m) => {
     paidMap[m.userId] = 0;
     shareMap[m.userId] = 0;
   });
 
-  expenses.forEach((exp) => {
+  safeExpenses.forEach((exp) => {
     total += exp.amount;
 
     if (exp.paidBy === currentUserId) {
@@ -47,14 +63,14 @@ export function calculateSplit(
       (categoryTotals[exp.category] || 0) + exp.amount;
   });
 
-  splits.forEach((split) => {
+  safeSplits.forEach((split) => {
     shareMap[split.userId] = (shareMap[split.userId] || 0) + split.amountOwed;
     if (split.userId === currentUserId) {
       totalOwed += split.amountOwed;
     }
   });
 
-  const balances = members.map((member) => {
+  const balances = safeMembers.map((member) => {
     const paid = paidMap[member.userId] || 0;
     const share = shareMap[member.userId] || 0;
     return {

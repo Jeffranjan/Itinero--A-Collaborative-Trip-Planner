@@ -61,6 +61,7 @@ import { ChecklistTab } from "@/components/trip/ChecklistTab";
 import { FilesTab } from "@/components/files/FilesTab";
 import { ReservationsTab } from "@/components/reservations/ReservationsTab";
 import { BudgetTab } from "@/components/budget/BudgetTab";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { useTripRealtime } from "@/hooks/useTripRealtime";
 
@@ -1232,11 +1233,13 @@ function TripPageContent() {
         )}
 
         {activeTab === "Budget" && (
-          <BudgetTab
-            trip={trip}
-            currentUserId={user?.$id || ""}
-            isOwnerOrEditor={isOwnerOrEditor}
-          />
+          <ErrorBoundary>
+            <BudgetTab
+              trip={trip}
+              currentUserId={user?.$id || ""}
+              isOwnerOrEditor={isOwnerOrEditor}
+            />
+          </ErrorBoundary>
         )}
       </main>
 

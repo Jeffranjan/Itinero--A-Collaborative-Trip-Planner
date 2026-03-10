@@ -11,6 +11,9 @@ interface Balance {
 
 /** Greedy min-transactions settlement: match largest creditor with largest debtor. */
 export function calculateSettlements(balances: Balance[]): Settlement[] {
+  if (!Array.isArray(balances) || balances.length === 0) return [];
+
+  // Separate into creditors (positive balance) and debtors (negative balance)
   const creditors: { userId: string; amount: number }[] = [];
   const debtors: { userId: string; amount: number }[] = [];
 

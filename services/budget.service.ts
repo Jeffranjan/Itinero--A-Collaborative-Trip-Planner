@@ -6,6 +6,11 @@ const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const EXPENSES_COLLECTION = "trip_expenses";
 const EXPENSE_SPLITS_COLLECTION = "expense_splits";
 
+/** Round to 2 decimal places to avoid floating-point precision issues */
+function roundCurrency(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 export const budgetService = {
   async createExpense(
     payload: CreateExpensePayload,
@@ -26,7 +31,9 @@ export const budgetService = {
         }
       );
 
-      const splitAmount = expenseData.amount / splitBetween.length;
+      const splitAmount = roundCurrency(
+        expenseData.amount / splitBetween.length
+      );
       const splits: ExpenseSplit[] = [];
 
       for (const splitUserId of splitBetween) {
@@ -57,10 +64,10 @@ export const budgetService = {
         EXPENSES_COLLECTION,
         [Query.equal("tripId", tripId), Query.orderDesc("$createdAt")]
       );
-      return expenses.documents;
+      return expenses?.documents ?? [];
     } catch (error) {
       console.error("Error fetching trip expenses:", error);
-      throw error;
+      return [];
     }
   },
 
@@ -71,10 +78,10 @@ export const budgetService = {
         EXPENSE_SPLITS_COLLECTION,
         [Query.equal("expenseId", expenseId)]
       );
-      return splits.documents;
+      return splits?.documents ?? [];
     } catch (error) {
       console.error("Error fetching expense splits:", error);
-      throw error;
+      return [];
     }
   },
 
@@ -127,7 +134,9 @@ export const budgetService = {
           );
         }
 
-        const splitAmount = updateData.amount / splitBetween.length;
+        const splitAmount = roundCurrency(
+          updateData.amount / splitBetween.length
+        );
         for (const splitUserId of splitBetween) {
           const split = await databases.createDocument<ExpenseSplit>(
             DATABASE_ID,
