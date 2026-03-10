@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { checklistService } from "@/services/checklist.service";
 import { ChecklistItem as ItemType } from "@/types/checklist";
 import { ChecklistList } from "./ChecklistList";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { arrayMove } from "@dnd-kit/sortable";
 
 interface Props {
@@ -15,6 +15,7 @@ interface Props {
 }
 
 export function ChecklistTab({ tripId, isOwnerOrEditor, userId }: Props) {
+  const queryClient = useQueryClient();
   const [newListTitle, setNewListTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const { data: checklistData, isLoading: isLoadingChecklists } = useQuery({
@@ -70,6 +71,7 @@ export function ChecklistTab({ tripId, isOwnerOrEditor, userId }: Props) {
         userId
       );
       setNewListTitle("");
+      queryClient.invalidateQueries({ queryKey: ["tripChecklists", tripId] });
     } catch (error) {
       toast.error("Failed to create checklist");
     } finally {
@@ -80,6 +82,7 @@ export function ChecklistTab({ tripId, isOwnerOrEditor, userId }: Props) {
   const handleDeleteList = async (listId: string) => {
     try {
       await checklistService.deleteChecklist(listId);
+      queryClient.invalidateQueries({ queryKey: ["tripChecklists", tripId] });
     } catch (error) {
       toast.error("Failed to delete checklist");
     }
@@ -89,6 +92,7 @@ export function ChecklistTab({ tripId, isOwnerOrEditor, userId }: Props) {
     if (!userId) return;
     try {
       await checklistService.createChecklistItem(listId, text, userId);
+      queryClient.invalidateQueries({ queryKey: ["tripChecklists", tripId] });
     } catch (error) {
       toast.error("Failed to add item");
     }
@@ -99,6 +103,9 @@ export function ChecklistTab({ tripId, isOwnerOrEditor, userId }: Props) {
 
     try {
       await checklistService.toggleItemCompletion(itemId, userId, completed);
+      queryClient.invalidateQueries({
+        queryKey: ["tripChecklistsCompletions", tripId, userId],
+      });
     } catch (error) {
       toast.error("Failed to update item");
     }
@@ -107,6 +114,7 @@ export function ChecklistTab({ tripId, isOwnerOrEditor, userId }: Props) {
   const handleDeleteItem = async (itemId: string) => {
     try {
       await checklistService.deleteChecklistItem(itemId);
+      queryClient.invalidateQueries({ queryKey: ["tripChecklists", tripId] });
     } catch (error) {
       toast.error("Failed to delete item");
     }
@@ -126,6 +134,7 @@ export function ChecklistTab({ tripId, isOwnerOrEditor, userId }: Props) {
         order: index,
       }));
       await checklistService.reorderChecklistItems(updates);
+      queryClient.invalidateQueries({ queryKey: ["tripChecklists", tripId] });
     } catch (error) {
       console.error(error);
     }
