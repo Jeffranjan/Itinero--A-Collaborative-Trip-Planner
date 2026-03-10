@@ -69,19 +69,18 @@ export function BudgetTab({
 }: BudgetTabProps) {
   const queryClient = useQueryClient();
 
-  // Hydration guard: prevent calculations before trip data is available
-  if (!trip?.$id) return null;
-
+  // All hooks must be declared unconditionally (rules-of-hooks)
   const { data: members = [], isLoading: isLoadingMembers } = useQuery({
-    queryKey: ["tripMembers", trip.$id],
+    queryKey: ["tripMembers", trip?.$id],
     queryFn: async () => {
       const tripMembers = await memberService.getTripMembers(trip.$id);
       return tripMembers as unknown as TripMemberInfo[];
     },
+    enabled: !!trip?.$id,
   });
 
   const { data: expensesData, isLoading: isLoadingExpenses } = useQuery({
-    queryKey: ["tripExpenses", trip.$id],
+    queryKey: ["tripExpenses", trip?.$id],
     queryFn: async () => {
       const tripExpenses = await budgetService.getTripExpenses(trip.$id);
       const allSplits: ExpenseSplit[] = [];
@@ -93,6 +92,7 @@ export function BudgetTab({
       );
       return { expenses: tripExpenses, splits: allSplits };
     },
+    enabled: !!trip?.$id,
   });
 
   const expenses = useMemo(
@@ -203,6 +203,9 @@ export function BudgetTab({
     ],
     color: ["#ff4500", "#ff8c00", "#1e90ff", "#32cd32", "#8a2be2", "#ff1493"],
   };
+
+  // Render guards — only AFTER all hooks
+  if (!trip?.$id) return null;
 
   if (isLoading) {
     return (
