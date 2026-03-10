@@ -154,10 +154,10 @@ export const memberService = {
         [Query.equal("tripId", tripId)]
       );
 
-      return members.documents;
+      return members?.documents ?? [];
     } catch (error) {
       console.error("Error fetching trip members:", error);
-      throw error;
+      return [];
     }
   },
 

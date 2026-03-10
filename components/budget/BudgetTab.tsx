@@ -69,6 +69,9 @@ export function BudgetTab({
 }: BudgetTabProps) {
   const queryClient = useQueryClient();
 
+  // Hydration guard: prevent calculations before trip data is available
+  if (!trip?.$id) return null;
+
   const { data: members = [], isLoading: isLoadingMembers } = useQuery({
     queryKey: ["tripMembers", trip.$id],
     queryFn: async () => {

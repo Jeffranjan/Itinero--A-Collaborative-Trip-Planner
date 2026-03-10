@@ -6,12 +6,13 @@ import { budgetService } from "@/services/budget.service";
 import {
   ExpenseCategory,
   Expense,
+  ExpenseSplit,
   CreateExpensePayload,
 } from "@/types/expense";
 import { Trip } from "@/types/trip";
 import { getCurrencySymbol } from "@/lib/currency";
 import { toast } from "sonner";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface TripMemberInfo {
   userId: string;
@@ -57,35 +58,130 @@ export function CreateExpenseModal({
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
 
-  // Create mutation
+  const queryClient = useQueryClient();
+
+  // Create mutation with optimistic UI
   const createMutation = useMutation({
     mutationFn: (payload: { data: CreateExpensePayload; userId: string }) =>
       budgetService.createExpense(payload.data, payload.userId),
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({
+        queryKey: ["tripExpenses", trip.$id],
+      });
+
+      const previousData = queryClient.getQueryData(["tripExpenses", trip.$id]);
+
+      // Build optimistic expense and splits
+      const tempId = `temp-${Date.now()}`;
+      const splitAmount =
+        Math.round(
+          (payload.data.amount / payload.data.splitBetween.length) * 100
+        ) / 100;
+
+      const optimisticExpense = {
+        $id: tempId,
+        $collectionId: "",
+        $databaseId: "",
+        $createdAt: new Date().toISOString(),
+        $updatedAt: new Date().toISOString(),
+        $permissions: [],
+        ...payload.data,
+        createdBy: payload.userId,
+        createdAt: new Date().toISOString(),
+      } as unknown as Expense;
+
+      const optimisticSplits = payload.data.splitBetween.map(
+        (userId, i) =>
+          ({
+            $id: `${tempId}-split-${i}`,
+            $collectionId: "",
+            $databaseId: "",
+            $createdAt: new Date().toISOString(),
+            $updatedAt: new Date().toISOString(),
+            $permissions: [],
+            expenseId: tempId,
+            userId,
+            amountOwed: splitAmount,
+          }) as unknown as ExpenseSplit
+      );
+
+      queryClient.setQueryData(
+        ["tripExpenses", trip.$id],
+        (old: { expenses: Expense[]; splits: ExpenseSplit[] } | undefined) => {
+          const prev = old || { expenses: [], splits: [] };
+          return {
+            expenses: [optimisticExpense, ...prev.expenses],
+            splits: [...prev.splits, ...optimisticSplits],
+          };
+        }
+      );
+
+      return { previousData };
+    },
+    onError: (_error, _payload, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(
+          ["tripExpenses", trip.$id],
+          context.previousData
+        );
+      }
+      toast.error("Failed to add expense");
+    },
     onSuccess: () => {
       toast.success("Expense added successfully");
       onSuccess?.();
       onClose();
     },
-    onError: (error) => {
-      console.error("Failed to create expense:", error);
-      toast.error("Failed to add expense");
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["tripExpenses", trip.$id] });
     },
   });
 
-  // Update mutation
+  // Update mutation with optimistic UI
   const updateMutation = useMutation({
     mutationFn: (payload: {
       expenseId: string;
       data: Partial<CreateExpensePayload>;
     }) => budgetService.updateExpense(payload.expenseId, payload.data),
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({
+        queryKey: ["tripExpenses", trip.$id],
+      });
+
+      const previousData = queryClient.getQueryData(["tripExpenses", trip.$id]);
+
+      // Optimistically patch the expense in cache
+      queryClient.setQueryData(
+        ["tripExpenses", trip.$id],
+        (old: { expenses: Expense[]; splits: ExpenseSplit[] } | undefined) => {
+          if (!old) return old;
+          return {
+            expenses: old.expenses.map((exp) =>
+              exp.$id === payload.expenseId ? { ...exp, ...payload.data } : exp
+            ),
+            splits: old.splits,
+          };
+        }
+      );
+
+      return { previousData };
+    },
+    onError: (_error, _payload, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(
+          ["tripExpenses", trip.$id],
+          context.previousData
+        );
+      }
+      toast.error("Failed to update expense");
+    },
     onSuccess: () => {
       toast.success("Expense updated successfully");
       onSuccess?.();
       onClose();
     },
-    onError: (error) => {
-      console.error("Failed to update expense:", error);
-      toast.error("Failed to update expense");
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["tripExpenses", trip.$id] });
     },
   });
 
