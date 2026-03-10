@@ -69,18 +69,30 @@ export function BudgetTab({
 }: BudgetTabProps) {
   const queryClient = useQueryClient();
 
-  // All hooks must be declared unconditionally (rules-of-hooks)
-  const { data: members = [], isLoading: isLoadingMembers } = useQuery({
+  // Each query returns a simple array — stable shape guaranteed by select + placeholderData
+  const { data: membersData, isLoading: isLoadingMembers } = useQuery({
     queryKey: ["tripMembers", trip?.$id],
     queryFn: async () => {
       const tripMembers = await memberService.getTripMembers(trip.$id);
       return tripMembers as unknown as TripMemberInfo[];
     },
     enabled: !!trip?.$id,
+    placeholderData: [] as TripMemberInfo[],
+    select: (data) => (Array.isArray(data) ? data : []),
   });
+
+  const members = membersData ?? [];
 
   const { data: expensesData, isLoading: isLoadingExpenses } = useQuery({
     queryKey: ["tripExpenses", trip?.$id],
+    queryFn: () => budgetService.getTripExpenses(trip.$id),
+    enabled: !!trip?.$id,
+    placeholderData: [] as Expense[],
+    select: (data) => (Array.isArray(data) ? data : []),
+  });
+
+  const { data: splitsData, isLoading: isLoadingSplits } = useQuery({
+    queryKey: ["tripSplits", trip?.$id],
     queryFn: async () => {
       const tripExpenses = await budgetService.getTripExpenses(trip.$id);
       const allSplits: ExpenseSplit[] = [];
@@ -90,24 +102,20 @@ export function BudgetTab({
           allSplits.push(...expSplits);
         })
       );
-      return { expenses: tripExpenses, splits: allSplits };
+      return allSplits;
     },
     enabled: !!trip?.$id,
+    placeholderData: [] as ExpenseSplit[],
+    select: (data) => (Array.isArray(data) ? data : []),
   });
 
-  const expenses = useMemo(
-    () => (Array.isArray(expensesData?.expenses) ? expensesData.expenses : []),
-    [expensesData?.expenses]
-  );
-  const splits = useMemo(
-    () => (Array.isArray(expensesData?.splits) ? expensesData.splits : []),
-    [expensesData?.splits]
-  );
-  const isLoading = isLoadingMembers || isLoadingExpenses;
+  const expenses = expensesData ?? [];
+  const splits = splitsData ?? [];
+  const isLoading = isLoadingMembers || isLoadingExpenses || isLoadingSplits;
 
   // Pre-build a lookup map so per-expense split access is O(1) instead of O(n)
   const splitsByExpenseId = useMemo(() => {
-    const map = new Map<string, typeof splits>();
+    const map = new Map<string, ExpenseSplit[]>();
     for (const s of splits) {
       const list = map.get(s.expenseId);
       if (list) {
@@ -128,25 +136,26 @@ export function BudgetTab({
       await queryClient.cancelQueries({
         queryKey: ["tripExpenses", trip.$id],
       });
+      await queryClient.cancelQueries({
+        queryKey: ["tripSplits", trip.$id],
+      });
 
-      const previousData = queryClient.getQueryData(["tripExpenses", trip.$id]);
+      const prevExpenses = queryClient.getQueryData(["tripExpenses", trip.$id]);
+      const prevSplits = queryClient.getQueryData(["tripSplits", trip.$id]);
 
       queryClient.setQueryData(
         ["tripExpenses", trip.$id],
-        (old: typeof expensesData) => {
-          if (!old) return old;
-          return {
-            expenses: old.expenses.filter(
-              (exp: Expense) => exp.$id !== expenseId
-            ),
-            splits: old.splits.filter(
-              (s: ExpenseSplit) => s.expenseId !== expenseId
-            ),
-          };
-        }
+        (old: Expense[] | undefined) =>
+          (old ?? []).filter((exp) => exp.$id !== expenseId)
       );
 
-      return { previousData };
+      queryClient.setQueryData(
+        ["tripSplits", trip.$id],
+        (old: ExpenseSplit[] | undefined) =>
+          (old ?? []).filter((s) => s.expenseId !== expenseId)
+      );
+
+      return { prevExpenses, prevSplits };
     },
     onError: (error: any, _expenseId, context) => {
       // 404 = already deleted by a collaborator
@@ -155,17 +164,21 @@ export function BudgetTab({
         return;
       }
 
-      if (context?.previousData) {
+      if (context?.prevExpenses) {
         queryClient.setQueryData(
           ["tripExpenses", trip.$id],
-          context.previousData
+          context.prevExpenses
         );
+      }
+      if (context?.prevSplits) {
+        queryClient.setQueryData(["tripSplits", trip.$id], context.prevSplits);
       }
       toast.error("Failed to delete expense");
     },
     onSuccess: () => {
       toast.success("Expense deleted");
       queryClient.invalidateQueries({ queryKey: ["tripExpenses", trip.$id] });
+      queryClient.invalidateQueries({ queryKey: ["tripSplits", trip.$id] });
     },
   });
 
@@ -175,6 +188,7 @@ export function BudgetTab({
 
   const handleExpenseChange = () => {
     queryClient.invalidateQueries({ queryKey: ["tripExpenses", trip.$id] });
+    queryClient.invalidateQueries({ queryKey: ["tripSplits", trip.$id] });
   };
 
   const summary = useMemo(

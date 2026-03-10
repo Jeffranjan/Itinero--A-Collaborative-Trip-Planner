@@ -69,14 +69,12 @@ export function useTripRealtime(tripId: string) {
       if (isExpenseEvent) {
         queryClient.setQueryData(
           ["tripExpenses", tripId],
-          (
-            old: { expenses: Expense[]; splits: ExpenseSplit[] } | undefined
-          ) => {
-            if (!old) return old;
+          (old: Expense[] | undefined) => {
+            const safe = old ?? [];
 
             if (isCreate) {
               // Avoid duplicates — match by ID or by content if optimistic (temp-) item exists
-              const exists = old.expenses.some(
+              const exists = safe.some(
                 (exp) =>
                   exp.$id === payload.$id ||
                   (exp.$id.startsWith("temp-") &&
@@ -84,30 +82,27 @@ export function useTripRealtime(tripId: string) {
                     exp.amount === payload.amount &&
                     exp.paidBy === payload.paidBy)
               );
-              if (exists) return old;
-              return {
-                expenses: [payload as Expense, ...old.expenses],
-                splits: old.splits,
-              };
+              if (exists) return safe;
+              return [payload as Expense, ...safe];
             }
 
             if (isDelete) {
-              return {
-                expenses: old.expenses.filter((exp) => exp.$id !== payload.$id),
-                splits: old.splits.filter((s) => s.expenseId !== payload.$id),
-              };
+              // Also clean up related splits
+              queryClient.setQueryData(
+                ["tripSplits", tripId],
+                (oldSplits: ExpenseSplit[] | undefined) =>
+                  (oldSplits ?? []).filter((s) => s.expenseId !== payload.$id)
+              );
+              return safe.filter((exp) => exp.$id !== payload.$id);
             }
 
             if (isUpdate) {
-              return {
-                expenses: old.expenses.map((exp) =>
-                  exp.$id === payload.$id ? { ...exp, ...payload } : exp
-                ),
-                splits: old.splits,
-              };
+              return safe.map((exp) =>
+                exp.$id === payload.$id ? { ...exp, ...payload } : exp
+              );
             }
 
-            return old;
+            return safe;
           }
         );
         return;
@@ -115,38 +110,27 @@ export function useTripRealtime(tripId: string) {
 
       if (isSplitEvent) {
         queryClient.setQueryData(
-          ["tripExpenses", tripId],
-          (
-            old: { expenses: Expense[]; splits: ExpenseSplit[] } | undefined
-          ) => {
-            if (!old) return old;
+          ["tripSplits", tripId],
+          (old: ExpenseSplit[] | undefined) => {
+            const safe = old ?? [];
 
             if (isCreate) {
-              const exists = old.splits.some((s) => s.$id === payload.$id);
-              if (exists) return old;
-              return {
-                expenses: old.expenses,
-                splits: [...old.splits, payload as ExpenseSplit],
-              };
+              const exists = safe.some((s) => s.$id === payload.$id);
+              if (exists) return safe;
+              return [...safe, payload as ExpenseSplit];
             }
 
             if (isDelete) {
-              return {
-                expenses: old.expenses,
-                splits: old.splits.filter((s) => s.$id !== payload.$id),
-              };
+              return safe.filter((s) => s.$id !== payload.$id);
             }
 
             if (isUpdate) {
-              return {
-                expenses: old.expenses,
-                splits: old.splits.map((s) =>
-                  s.$id === payload.$id ? { ...s, ...payload } : s
-                ),
-              };
+              return safe.map((s) =>
+                s.$id === payload.$id ? { ...s, ...payload } : s
+              );
             }
 
-            return old;
+            return safe;
           }
         );
         return;

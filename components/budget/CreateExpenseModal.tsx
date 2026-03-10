@@ -68,8 +68,12 @@ export function CreateExpenseModal({
       await queryClient.cancelQueries({
         queryKey: ["tripExpenses", trip.$id],
       });
+      await queryClient.cancelQueries({
+        queryKey: ["tripSplits", trip.$id],
+      });
 
-      const previousData = queryClient.getQueryData(["tripExpenses", trip.$id]);
+      const prevExpenses = queryClient.getQueryData(["tripExpenses", trip.$id]);
+      const prevSplits = queryClient.getQueryData(["tripSplits", trip.$id]);
 
       // Build optimistic expense and splits
       const tempId = `temp-${Date.now()}`;
@@ -107,59 +111,67 @@ export function CreateExpenseModal({
 
       queryClient.setQueryData(
         ["tripExpenses", trip.$id],
-        (old: { expenses: Expense[]; splits: ExpenseSplit[] } | undefined) => {
-          const prev = old || { expenses: [], splits: [] };
-          return {
-            expenses: [optimisticExpense, ...prev.expenses],
-            splits: [...prev.splits, ...optimisticSplits],
-          };
-        }
+        (old: Expense[] | undefined) => [optimisticExpense, ...(old ?? [])]
       );
 
-      return { previousData };
+      queryClient.setQueryData(
+        ["tripSplits", trip.$id],
+        (old: ExpenseSplit[] | undefined) => [
+          ...(old ?? []),
+          ...optimisticSplits,
+        ]
+      );
+
+      return { prevExpenses, prevSplits };
     },
     onError: (_error, _payload, context) => {
-      if (context?.previousData) {
+      if (context?.prevExpenses) {
         queryClient.setQueryData(
           ["tripExpenses", trip.$id],
-          context.previousData
+          context.prevExpenses
         );
+      }
+      if (context?.prevSplits) {
+        queryClient.setQueryData(["tripSplits", trip.$id], context.prevSplits);
       }
       toast.error("Failed to add expense");
     },
     onSuccess: (data) => {
-      // Replace optimistic temp item with the real server document
+      // Replace optimistic temp expense with the real server document
       queryClient.setQueryData(
         ["tripExpenses", trip.$id],
-        (old: { expenses: Expense[]; splits: ExpenseSplit[] } | undefined) => {
-          if (!old) return old;
-          return {
-            expenses: old.expenses.map((e) =>
-              e.$id.startsWith("temp-") && e.title === data.expense.title
-                ? data.expense
-                : e
-            ),
-            splits: old.splits.map((s) => {
-              // Replace optimistic splits with real ones
-              const realSplit = data.splits.find(
-                (rs) =>
-                  rs.userId === s.userId && rs.expenseId === data.expense.$id
-              );
-              return s.$id.startsWith("temp-") &&
-                s.expenseId.startsWith("temp-") &&
-                realSplit
-                ? realSplit
-                : s;
-            }),
-          };
-        }
+        (old: Expense[] | undefined) =>
+          (old ?? []).map((e) =>
+            e.$id.startsWith("temp-") && e.title === data.expense.title
+              ? data.expense
+              : e
+          )
       );
+
+      // Replace optimistic temp splits with real ones
+      queryClient.setQueryData(
+        ["tripSplits", trip.$id],
+        (old: ExpenseSplit[] | undefined) =>
+          (old ?? []).map((s) => {
+            const realSplit = data.splits.find(
+              (rs) =>
+                rs.userId === s.userId && rs.expenseId === data.expense.$id
+            );
+            return s.$id.startsWith("temp-") &&
+              s.expenseId.startsWith("temp-") &&
+              realSplit
+              ? realSplit
+              : s;
+          })
+      );
+
       toast.success("Expense added successfully");
       onSuccess?.();
       onClose();
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["tripExpenses", trip.$id] });
+      queryClient.invalidateQueries({ queryKey: ["tripSplits", trip.$id] });
     },
   });
 
@@ -174,29 +186,24 @@ export function CreateExpenseModal({
         queryKey: ["tripExpenses", trip.$id],
       });
 
-      const previousData = queryClient.getQueryData(["tripExpenses", trip.$id]);
+      const prevExpenses = queryClient.getQueryData(["tripExpenses", trip.$id]);
 
       // Optimistically patch the expense in cache
       queryClient.setQueryData(
         ["tripExpenses", trip.$id],
-        (old: { expenses: Expense[]; splits: ExpenseSplit[] } | undefined) => {
-          if (!old) return old;
-          return {
-            expenses: old.expenses.map((exp) =>
-              exp.$id === payload.expenseId ? { ...exp, ...payload.data } : exp
-            ),
-            splits: old.splits,
-          };
-        }
+        (old: Expense[] | undefined) =>
+          (old ?? []).map((exp) =>
+            exp.$id === payload.expenseId ? { ...exp, ...payload.data } : exp
+          )
       );
 
-      return { previousData };
+      return { prevExpenses };
     },
     onError: (_error, _payload, context) => {
-      if (context?.previousData) {
+      if (context?.prevExpenses) {
         queryClient.setQueryData(
           ["tripExpenses", trip.$id],
-          context.previousData
+          context.prevExpenses
         );
       }
       toast.error("Failed to update expense");
@@ -208,6 +215,7 @@ export function CreateExpenseModal({
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["tripExpenses", trip.$id] });
+      queryClient.invalidateQueries({ queryKey: ["tripSplits", trip.$id] });
     },
   });
 
