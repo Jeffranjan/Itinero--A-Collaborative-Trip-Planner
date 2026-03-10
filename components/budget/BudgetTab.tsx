@@ -96,14 +96,28 @@ export function BudgetTab({
   });
 
   const expenses = useMemo(
-    () => expensesData?.expenses || [],
+    () => (Array.isArray(expensesData?.expenses) ? expensesData.expenses : []),
     [expensesData?.expenses]
   );
   const splits = useMemo(
-    () => expensesData?.splits || [],
+    () => (Array.isArray(expensesData?.splits) ? expensesData.splits : []),
     [expensesData?.splits]
   );
   const isLoading = isLoadingMembers || isLoadingExpenses;
+
+  // Pre-build a lookup map so per-expense split access is O(1) instead of O(n)
+  const splitsByExpenseId = useMemo(() => {
+    const map = new Map<string, typeof splits>();
+    for (const s of splits) {
+      const list = map.get(s.expenseId);
+      if (list) {
+        list.push(s);
+      } else {
+        map.set(s.expenseId, [s]);
+      }
+    }
+    return map;
+  }, [splits]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
@@ -331,9 +345,8 @@ export function BudgetTab({
                 </motion.div>
               ) : (
                 expenses.map((expense) => {
-                  const expenseSplits = splits.filter(
-                    (s) => s.expenseId === expense.$id
-                  );
+                  const expenseSplits =
+                    splitsByExpenseId.get(expense.$id) ?? [];
                   const mySplit = expenseSplits.find(
                     (s) => s.userId === currentUserId
                   );
@@ -428,7 +441,7 @@ export function BudgetTab({
 
         const getName = (userId: string) => {
           if (userId === currentUserId) return "You";
-          const member = members.find((m) => m.userId === userId);
+          const member = (members ?? []).find((m) => m.userId === userId);
           return member?.name || "Unknown";
         };
 

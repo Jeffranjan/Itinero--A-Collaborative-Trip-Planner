@@ -42,7 +42,7 @@ export function ExpenseCard({
   userShare,
   currency,
 }: ExpenseCardProps) {
-  const payer = members.find((m) => m.userId === expense.paidBy);
+  const payer = (members ?? []).find((m) => m.userId === expense.paidBy);
   const isPayer = expense.paidBy === currentUserId;
 
   const payerName = isPayer ? "You" : payer?.name || "Unknown";
