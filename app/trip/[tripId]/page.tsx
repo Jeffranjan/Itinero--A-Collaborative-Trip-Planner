@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { format, addDays, isBefore } from "date-fns";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -51,7 +51,7 @@ import { ActivityCard } from "@/components/ActivityCard";
 import { MemberList } from "@/components/MemberList";
 import { EditTripModal } from "@/components/EditTripModal";
 import { RenameDayModal } from "@/components/RenameDayModal";
-import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
+
 import { useTripPresence } from "@/hooks/useTripPresence";
 import { TripPresence, presenceService } from "@/services/presence.service";
 import { ImageUploadModal } from "@/components/ImageUploadModal";
@@ -63,7 +63,6 @@ import { ReservationsTab } from "@/components/reservations/ReservationsTab";
 import { BudgetTab } from "@/components/budget/BudgetTab";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthGuard } from "@/components/auth/AuthGuard";
-import { useTripRealtime } from "@/hooks/useTripRealtime";
 
 function TripPageContent() {
   const params = useParams();
@@ -72,8 +71,6 @@ function TripPageContent() {
 
   const tripId = params.tripId as string;
   const queryClient = useQueryClient();
-
-  useTripRealtime(tripId);
 
   const { data: trip, isLoading: isLoadingTrip } = useQuery({
     queryKey: ["trip", tripId],
@@ -206,95 +203,83 @@ function TripPageContent() {
     return () => clearInterval(interval);
   }, []);
 
-  // Stable channel array prevents WebSocket reconnections on re-render
-  const realtimeChannels = useMemo(
-    () => [
-      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.role_requests.documents`,
-      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_presence.documents`,
-      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trips.documents`,
-      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_members.documents`,
-    ],
-    []
-  );
+  // Listen for role request events from the central realtime pipeline
+  useEffect(() => {
+    const handleRoleRequest = (e: Event) => {
+      const { event, tripId: eventTripId } = (e as CustomEvent).detail;
+      if (eventTripId !== tripId) return;
 
-  useRealtimeSubscription(
-    realtimeChannels,
-    useCallback(
-      (event) => {
-        const payload = event.payload as any;
+      const payload = event.payload as any;
+      const isCreate = event.events.some((ev: string) =>
+        ev.includes(".create")
+      );
+      const isUpdate = event.events.some((ev: string) =>
+        ev.includes(".update")
+      );
+      const isDelete = event.events.some((ev: string) =>
+        ev.includes(".delete")
+      );
 
-        if (payload.tripId && payload.tripId !== tripId) return;
-
-        const isCreate = event.events.some((e: string) =>
-          e.includes(".create")
-        );
-        const isUpdate = event.events.some((e: string) =>
-          e.includes(".update")
-        );
-        const isDelete = event.events.some((e: string) =>
-          e.includes(".delete")
-        );
-
-        if (
-          event.events.some((e: string) => e.includes(".collections.trips."))
-        ) {
-          if (isUpdate) {
-            queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
-            toast("Trip details were updated");
+      const request = payload as RoleRequest;
+      if (isCreate && request.status === "pending") {
+        if (trip && user && trip.createdBy === user.$id) {
+          roleRequestService
+            .getPendingRequestsForTrip(tripId)
+            .then((reqs) => setPendingRequests(reqs));
+          toast.info("New Editor Access Request received");
+        }
+      } else if (isUpdate || isDelete) {
+        if (trip && user && trip.createdBy === user.$id) {
+          if (request.status !== "pending" || isDelete) {
+            setPendingRequests((prev) =>
+              prev.filter((r) => r.$id !== request.$id)
+            );
           }
         }
-
         if (
-          event.events.some((e: string) =>
-            e.includes(".collections.trip_members.")
-          )
+          user &&
+          request.userId === user.$id &&
+          (request.status !== "pending" || isDelete)
         ) {
-          if (user && payload.userId === user.$id) {
-            if (isUpdate) {
-              setCurrentUserRole(payload.role);
-              toast.success(`Your role was updated to ${payload.role}`);
-            } else if (isDelete) {
-              toast.error("You have been removed from this trip.");
-              router.push("/dashboard");
-            }
-          }
+          setHasPendingRequest(false);
         }
+      }
+    };
 
-        if (
-          event.events.some((e: string) =>
-            e.includes(".collections.role_requests.")
-          )
-        ) {
-          const request = payload as RoleRequest;
-          if (isCreate && request.status === "pending") {
-            if (trip && user && trip.createdBy === user.$id) {
-              roleRequestService
-                .getPendingRequestsForTrip(tripId)
-                .then((reqs) => setPendingRequests(reqs));
-              toast.info("New Editor Access Request received");
-            }
-          } else if (isUpdate || isDelete) {
-            if (trip && user && trip.createdBy === user.$id) {
-              if (request.status !== "pending" || isDelete) {
-                setPendingRequests((prev) =>
-                  prev.filter((r) => r.$id !== request.$id)
-                );
-              }
-            }
+    window.addEventListener("realtime:roleRequests", handleRoleRequest);
+    return () =>
+      window.removeEventListener("realtime:roleRequests", handleRoleRequest);
+  }, [tripId, user, trip]);
 
-            if (
-              user &&
-              request.userId === user.$id &&
-              (request.status !== "pending" || isDelete)
-            ) {
-              setHasPendingRequest(false);
-            }
-          }
+  // Listen for member events from the central realtime pipeline
+  useEffect(() => {
+    const handleMemberEvent = (e: Event) => {
+      const { event, tripId: eventTripId } = (e as CustomEvent).detail;
+      if (eventTripId !== tripId) return;
+
+      const payload = event.payload as any;
+      if (user && payload.userId === user.$id) {
+        const isUpdate = event.events.some((ev: string) =>
+          ev.includes(".update")
+        );
+        const isDelete = event.events.some((ev: string) =>
+          ev.includes(".delete")
+        );
+
+        if (isUpdate) {
+          setCurrentUserRole(payload.role);
+          toast.success(`Your role was updated to ${payload.role}`);
+        } else if (isDelete) {
+          toast.error("You have been removed from this trip.");
+          router.push("/dashboard");
         }
-      },
-      [tripId, user, router, trip, queryClient]
-    )
-  );
+      }
+    };
+
+    window.addEventListener("realtime:members", handleMemberEvent);
+    return () =>
+      window.removeEventListener("realtime:members", handleMemberEvent);
+  }, [tripId, user, router]);
 
   const handleAddDay = async () => {
     if (!trip) return;

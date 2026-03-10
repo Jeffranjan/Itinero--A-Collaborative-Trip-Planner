@@ -25,6 +25,7 @@ import { memberService } from "@/services/member.service";
 import { Expense, ExpenseSplit } from "@/types/expense";
 import { Trip } from "@/types/trip";
 import { formatCurrency } from "@/lib/currency";
+import { ensureArray } from "@/lib/reactQuery/ensureArray";
 import { calculateSplit } from "@/utils/calculateSplit";
 import { calculateSettlements } from "@/utils/calculateSettlements";
 
@@ -78,7 +79,7 @@ export function BudgetTab({
     },
     enabled: !!trip?.$id,
     placeholderData: [] as TripMemberInfo[],
-    select: (data) => (Array.isArray(data) ? data : []),
+    select: ensureArray<TripMemberInfo>,
   });
 
   const members = membersData ?? [];
@@ -88,7 +89,7 @@ export function BudgetTab({
     queryFn: () => budgetService.getTripExpenses(trip.$id),
     enabled: !!trip?.$id,
     placeholderData: [] as Expense[],
-    select: (data) => (Array.isArray(data) ? data : []),
+    select: ensureArray<Expense>,
   });
 
   const { data: splitsData, isLoading: isLoadingSplits } = useQuery({
@@ -106,7 +107,7 @@ export function BudgetTab({
     },
     enabled: !!trip?.$id,
     placeholderData: [] as ExpenseSplit[],
-    select: (data) => (Array.isArray(data) ? data : []),
+    select: ensureArray<ExpenseSplit>,
   });
 
   const expenses = expensesData ?? [];

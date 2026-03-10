@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Edit2, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { memberService } from "@/services/member.service";
 import { MemberAvatar } from "./MemberAvatar";
 import { toast } from "sonner";
-import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
+import { useQuery } from "@tanstack/react-query";
+import { ensureArray } from "@/lib/reactQuery/ensureArray";
 
 import { TripPresence } from "@/services/presence.service";
 
@@ -18,9 +19,6 @@ interface MemberListProps {
 }
 
 export function MemberList({ tripId, isOwner, activeUsers }: MemberListProps) {
-  const [members, setMembers] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   // Close dropdown when clicking outside
@@ -44,35 +42,18 @@ export function MemberList({ tripId, isOwner, activeUsers }: MemberListProps) {
     setIsDropdownOpen(false);
   };
 
-  const fetchMembers = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const data = await memberService.getTripMembers(tripId);
-      setMembers(data);
-    } catch (error) {
-      console.error("Failed to load members:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [tripId]);
+  // Central realtime pipeline invalidates this cache automatically
+  const { data: members = [], isLoading } = useQuery({
+    queryKey: ["tripMembers", tripId],
+    queryFn: () => memberService.getTripMembers(tripId),
+    enabled: !!tripId,
+    placeholderData: [],
+    select: ensureArray,
+  });
 
-  useEffect(() => {
-    fetchMembers();
-  }, [fetchMembers]);
-
-  // Realtime updates for live avatars
-  useRealtimeSubscription(
-    `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_members.documents`,
-    useCallback(
-      (event) => {
-        const payload = event.payload as any;
-        if (payload.tripId === tripId) {
-          fetchMembers();
-        }
-      },
-      [tripId, fetchMembers]
-    )
-  );
+  if (process.env.NODE_ENV === "development" && !Array.isArray(members)) {
+    console.warn("MemberList expected array but received:", members);
+  }
 
   if (isLoading) {
     return (
@@ -88,12 +69,13 @@ export function MemberList({ tripId, isOwner, activeUsers }: MemberListProps) {
   }
 
   // Deduplicate members by user ID to handle any old bad data
+  const safeMembers = Array.isArray(members) ? members : [];
   const uniqueMembers = Array.from(
-    new Map(members.map((m) => [m.userId, m])).values()
+    new Map(safeMembers.map((m: any) => [m.userId, m])).values()
   );
 
   // Sort: Owner first
-  const sortedMembers = uniqueMembers.sort((a, b) => {
+  const sortedMembers = (uniqueMembers as any[]).sort((a, b) => {
     if (a.role === "owner") return -1;
     if (b.role === "owner") return 1;
     return 0;

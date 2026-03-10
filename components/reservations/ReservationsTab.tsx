@@ -1,12 +1,12 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState } from "react";
 import { Plus, Loader2, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { AnimatePresence } from "framer-motion";
 
 import { reservationService } from "@/services/reservation.service";
 import { memberService } from "@/services/member.service";
-import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { ensureArray } from "@/lib/reactQuery/ensureArray";
 import { TripReservation } from "@/types/reservation";
 
 import { Button } from "@/components/ui/button";
@@ -24,12 +24,13 @@ export function ReservationsTab({
   isOwnerOrEditor,
   userId,
 }: ReservationsTabProps) {
-  const queryClient = useQueryClient();
-
   const { data: reservations = [], isLoading: isReservationsLoading } =
     useQuery({
       queryKey: ["tripReservations", tripId],
       queryFn: () => reservationService.getTripReservations(tripId),
+      enabled: !!tripId,
+      placeholderData: [],
+      select: ensureArray<TripReservation>,
     });
 
   const { data: membersData, isLoading: isMembersLoading } = useQuery({
@@ -61,7 +62,7 @@ export function ReservationsTab({
         onClick: async () => {
           try {
             await reservationService.deleteReservation(id);
-            // Realtime will remove it from the list
+            // Realtime pipeline will remove it from the list
           } catch (error) {
             toast.error("Failed to delete reservation.");
           }
@@ -73,40 +74,6 @@ export function ReservationsTab({
       },
     });
   };
-
-  const channels = useMemo(
-    () => [
-      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_reservations.documents`,
-    ],
-    []
-  );
-
-  useRealtimeSubscription(
-    channels,
-    useCallback(
-      (event) => {
-        const payload = event.payload as TripReservation;
-        if (payload.tripId !== tripId) return;
-
-        const isCreate = event.events.some((e: string) =>
-          e.includes(".create")
-        );
-        const isUpdate = event.events.some((e: string) =>
-          e.includes(".update")
-        );
-        const isDelete = event.events.some((e: string) =>
-          e.includes(".delete")
-        );
-
-        if (isCreate || isUpdate || isDelete) {
-          queryClient.invalidateQueries({
-            queryKey: ["tripReservations", tripId],
-          });
-        }
-      },
-      [tripId, queryClient]
-    )
-  );
 
   if (isLoading) {
     return (

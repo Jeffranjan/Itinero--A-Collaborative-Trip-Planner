@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 
 import { PageTransition } from "@/components/motion/PageTransition";
 import { QueryProvider } from "@/components/providers/QueryProvider";
+import { RealtimeProvider } from "@/contexts/RealtimeProvider";
 
 export default function RootLayout({
   children,
@@ -36,7 +37,9 @@ export default function RootLayout({
         <div className="pointer-events-none fixed inset-0 z-[-1] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-card-dark/40 via-background-dark to-background-dark"></div>
 
         <QueryProvider>
-          <PageTransition>{children}</PageTransition>
+          <RealtimeProvider>
+            <PageTransition>{children}</PageTransition>
+          </RealtimeProvider>
         </QueryProvider>
         <Toaster theme="dark" position="bottom-right" />
       </body>

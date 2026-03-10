@@ -1,12 +1,12 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { CloudUpload, File as FileIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { TripFile } from "@/types/file";
 import { fileService } from "@/services/file.service";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
+import { useQuery } from "@tanstack/react-query";
+import { ensureArray } from "@/lib/reactQuery/ensureArray";
 import { FileCard } from "./FileCard";
 import { FilePreviewModal } from "./FilePreviewModal";
 
@@ -17,7 +17,6 @@ interface FilesTabProps {
 }
 
 export function FilesTab({ tripId, userId, isOwnerOrEditor }: FilesTabProps) {
-  const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [previewFile, setPreviewFile] = useState<TripFile | null>(null);
@@ -25,38 +24,10 @@ export function FilesTab({ tripId, userId, isOwnerOrEditor }: FilesTabProps) {
   const { data: files = [], isLoading } = useQuery({
     queryKey: ["tripFiles", tripId],
     queryFn: () => fileService.getTripFiles(tripId),
+    enabled: !!tripId,
+    placeholderData: [],
+    select: ensureArray<TripFile>,
   });
-
-  // Realtime: invalidate file queries on create/delete
-  const realtimeChannels = useMemo(
-    () => [
-      `databases.${process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!}.collections.trip_files.documents`,
-    ],
-    []
-  );
-
-  useRealtimeSubscription(
-    realtimeChannels,
-    useCallback(
-      (event: any) => {
-        const payload = event.payload as TripFile;
-
-        if (payload.tripId !== tripId) return;
-
-        const isCreate = event.events.some((e: string) =>
-          e.includes(".create")
-        );
-        const isDelete = event.events.some((e: string) =>
-          e.includes(".delete")
-        );
-
-        if (isCreate || isDelete) {
-          queryClient.invalidateQueries({ queryKey: ["tripFiles", tripId] });
-        }
-      },
-      [tripId, queryClient]
-    )
-  );
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
